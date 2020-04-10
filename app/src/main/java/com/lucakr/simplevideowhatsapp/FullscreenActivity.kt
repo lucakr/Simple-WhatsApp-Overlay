@@ -2,6 +2,7 @@ package com.lucakr.simplevideowhatsapp
 
 import android.Manifest.permission.CALL_PHONE
 import android.Manifest.permission.READ_CONTACTS
+import android.accessibilityservice.AccessibilityService
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -12,6 +13,8 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.ContactsContract
 import android.provider.Settings
+import android.provider.Settings.SettingNotFoundException
+import android.text.TextUtils.SimpleStringSplitter
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -22,7 +25,6 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import com.lucakr.simplevideowhatsapp.OverlayService
 import kotlinx.android.synthetic.main.activity_fullscreen.*
 
 
@@ -33,8 +35,6 @@ import kotlinx.android.synthetic.main.activity_fullscreen.*
 class FullscreenActivity : AppCompatActivity() {
     private lateinit var listView:ListView
     private lateinit var selectedPerson:person
-    private lateinit var svc:Intent
-    private var pauseSelfInitiated = false
 
     fun hideStuff() {
         name_list.systemUiVisibility =
@@ -45,44 +45,6 @@ class FullscreenActivity : AppCompatActivity() {
                     View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
                     View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
         fullscreen_content_controls.visibility = View.VISIBLE
-    }
-
-    private val bReceiver: BroadcastReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            // Rehide things in case
-            hideStuff()
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        LocalBroadcastManager.getInstance(this)
-            .registerReceiver(bReceiver, IntentFilter("message"))
-
-        pauseSelfInitiated = false
-    }
-
-    override fun onPause() {
-        super.onPause()
-        LocalBroadcastManager.getInstance(this)
-            .unregisterReceiver(bReceiver)
-
-        // Start protective overlay service
-        launchMainService()
-    }
-
-    private fun launchMainService() {
-        val svc = Intent(this, OverlayService::class.java)
-        if(pauseSelfInitiated)
-        {
-            svc.putExtra("state","end")
-        } else {
-            svc.putExtra("state", "start")
-        }
-        pauseSelfInitiated = false
-
-        stopService(svc)
-        startService(svc)
     }
 
     @RequiresApi(Build.VERSION_CODES.M)
@@ -185,7 +147,6 @@ class FullscreenActivity : AppCompatActivity() {
         i.setPackage("com.whatsapp")
 
         // Can't get here without accepting the permission onCreate
-        pauseSelfInitiated = true
         println("STARTING WHATSAPP")
         startActivity(i)
     }
@@ -205,7 +166,6 @@ class FullscreenActivity : AppCompatActivity() {
         i.setPackage("com.whatsapp")
 
         // Can't get here without accepting the permission onCreate
-        pauseSelfInitiated = true
         println("STARTING WHATSAPP")
         startActivity(i)
     }
@@ -235,10 +195,8 @@ class FullscreenActivity : AppCompatActivity() {
         super.onPostResume()
         println("RETURNED FROM WHATSAPP")
 
-        if(::svc.isInitialized)
-        {
-            stopService(svc)
-        }
+        val intent = Intent(FULLSCREEN_ACTIVE)
+        LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
 
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.hide()
@@ -383,6 +341,42 @@ class FullscreenActivity : AppCompatActivity() {
             // This is your listview's selected item
             selectedPerson = parent.getItemAtPosition(position) as person
         }
+
+        // Start automation service
+        if (!isAccessibilityOn(this, AutomationService::class.java)) {
+            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            startActivity(intent)
+            return
+        }
+    }
+
+    private fun isAccessibilityOn(context: Context, clazz: Class<out AccessibilityService?>): Boolean {
+        var accessibilityEnabled = 0
+        val service = context.packageName + "/" + clazz.canonicalName
+        try {
+            accessibilityEnabled = Settings.Secure.getInt(
+                context.applicationContext.contentResolver,
+                Settings.Secure.ACCESSIBILITY_ENABLED
+            )
+        } catch (ignored: SettingNotFoundException) {
+        }
+        val colonSplitter = SimpleStringSplitter(':')
+        if (accessibilityEnabled == 1) {
+            val settingValue = Settings.Secure.getString(
+                context.applicationContext.contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            )
+            if (settingValue != null) {
+                colonSplitter.setString(settingValue)
+                while (colonSplitter.hasNext()) {
+                    val accessibilityService = colonSplitter.next()
+                    if (accessibilityService.equals(service, ignoreCase = true)) {
+                        return true
+                    }
+                }
+            }
+        }
+        return false
     }
 
 
@@ -390,5 +384,6 @@ class FullscreenActivity : AppCompatActivity() {
         private val MY_PERMISSIONS_REQUEST_CONTACTS = 0
         private val MY_PERMISSIONS_REQUEST_CALL_PHONE = 1
         private const val REQUEST_CODE = 10101
+        val FULLSCREEN_ACTIVE = "fullscreen_active"
     }
 }
