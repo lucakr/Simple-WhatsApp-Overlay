@@ -7,4 +7,8 @@
     <string name="decline_button">DECLINE</string>
     <string name="contact_list">CONTACTS</string>
     <string name="accessibility_service_description">AUTOMATION</string>
+    <string name="right_btn"><![CDATA[>]]></string>
+    <string name="left_btn"><![CDATA[<]]></string>
+    <string name="default_vasto_time">VASTO TIME</string>
+    <string name="time">Time in Italy</string>
 </resources>

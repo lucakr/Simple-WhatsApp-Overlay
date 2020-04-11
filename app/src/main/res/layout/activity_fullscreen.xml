@@ -7,19 +7,6 @@
     android:background="#ffffff"
     tools:context=".FullscreenActivity">
 
-    <!-- The primary full-screen view. This can be replaced with whatever view
-         is needed to present your content, e.g. VideoView, SurfaceView,
-         TextureView, etc. -->
-    <ListView xmlns:android="http://schemas.android.com/apk/res/android"
-        android:id="@+id/name_list"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:gravity="center"
-        android:keepScreenOn="true"
-        android:textSize="40sp"
-        android:choiceMode="singleChoice"
-        android:listSelector="@color/colorAccent"/>
-
     <!-- This FrameLayout insets its children based on system windows using
          android:fitsSystemWindows. -->
     <FrameLayout
@@ -31,20 +18,69 @@
             android:id="@+id/fullscreen_content_controls"
             style="?metaButtonBarStyle"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom|center_horizontal"
-            android:background="@color/green_overlay"
-            android:orientation="horizontal"
+            android:layout_height="match_parent"
+            android:layout_gravity="center_horizontal"
+            android:orientation="vertical"
             tools:ignore="UselessParent">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@color/blue_display"
+                android:gravity="center"
+                android:textSize="30sp"
+                android:text="@string/time"/>
+
+            <TextClock
+                android:id="@+id/clock"
+                android:format12Hour="hh:mm a"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@color/blue_display"
+                android:gravity="center"
+                android:textSize="40sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:orientation="horizontal"
+                android:layout_weight="1">
+
+                <Button
+                    android:id="@+id/left_button"
+                    android:layout_width="65sp"
+                    android:layout_height="match_parent"
+                    android:text="@string/left_btn"
+                    android:textSize="60sp" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/name_list"
+                    app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                    android:numColumns="auto_fit"
+                    android:layout_height="match_parent"
+                    android:layout_width="0dp"
+                    android:scrollbars="horizontal"
+                    android:layout_weight="1"/>
+
+                <Button
+                    android:id="@+id/right_button"
+                    android:layout_width="65sp"
+                    android:layout_height="match_parent"
+                    android:text="@string/right_btn"
+                    android:textSize="60sp" />
+
+            </LinearLayout>
 
             <Button
                 android:id="@+id/call_button"
                 style="?metaButtonBarButtonStyle"
-                android:layout_width="0dp"
-                android:layout_height="70dp"
-                android:layout_weight="1"
-                android:textSize="40sp"
-                android:text="@string/call_button" />
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_weight="0"
+                android:background="@color/green_overlay"
+                android:text="@string/call_button"
+                android:textSize="50sp" />
 
         </LinearLayout>
     </FrameLayout>

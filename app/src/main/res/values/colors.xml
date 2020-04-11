@@ -4,6 +4,7 @@
     <color name="colorPrimaryDark">#000000</color>
     <color name="colorAccent">#66000000</color>
 
+    <color name="blue_display">#009DFF</color>
     <color name="green_overlay">#25D366</color>
     <color name="red_overlay">#ff4242</color>
 </resources>

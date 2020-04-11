@@ -3,10 +3,8 @@ package com.lucakr.simplevideowhatsapp
 import android.Manifest.permission.CALL_PHONE
 import android.Manifest.permission.READ_CONTACTS
 import android.accessibilityservice.AccessibilityService
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -14,6 +12,7 @@ import android.os.Bundle
 import android.provider.ContactsContract
 import android.provider.Settings
 import android.provider.Settings.SettingNotFoundException
+import android.text.Layout
 import android.text.TextUtils.SimpleStringSplitter
 import android.view.LayoutInflater
 import android.view.View
@@ -25,6 +24,8 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import kotlinx.android.synthetic.main.activity_fullscreen.*
 
 
@@ -33,10 +34,10 @@ import kotlinx.android.synthetic.main.activity_fullscreen.*
  * status bar and navigation/system bar) with user interaction.
  */
 class FullscreenActivity : AppCompatActivity() {
-    private lateinit var listView:ListView
-    private lateinit var selectedPerson:person
+    private lateinit var contactView:RecyclerView
+    private var contactPos = 0
 
-    fun hideStuff() {
+    fun hideNavigationAndNotification() {
         name_list.systemUiVisibility =
             View.SYSTEM_UI_FLAG_LOW_PROFILE or
                     View.SYSTEM_UI_FLAG_FULLSCREEN or
@@ -46,6 +47,8 @@ class FullscreenActivity : AppCompatActivity() {
                     View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
         fullscreen_content_controls.visibility = View.VISIBLE
     }
+
+    /** PERMISSION SETUP **/
 
     @RequiresApi(Build.VERSION_CODES.M)
     private fun checkDrawOverlayPermission() {
@@ -132,6 +135,37 @@ class FullscreenActivity : AppCompatActivity() {
         }
     }
 
+    private fun isAccessibilityOn(context: Context, clazz: Class<out AccessibilityService?>): Boolean {
+        var accessibilityEnabled = 0
+        val service = context.packageName + "/" + clazz.canonicalName
+        try {
+            accessibilityEnabled = Settings.Secure.getInt(
+                context.applicationContext.contentResolver,
+                Settings.Secure.ACCESSIBILITY_ENABLED
+            )
+        } catch (ignored: SettingNotFoundException) {
+        }
+        val colonSplitter = SimpleStringSplitter(':')
+        if (accessibilityEnabled == 1) {
+            val settingValue = Settings.Secure.getString(
+                context.applicationContext.contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            )
+            if (settingValue != null) {
+                colonSplitter.setString(settingValue)
+                while (colonSplitter.hasNext()) {
+                    val accessibilityService = colonSplitter.next()
+                    if (accessibilityService.equals(service, ignoreCase = true)) {
+                        return true
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+    /** WHATSAPP INITIATION **/
+
     @RequiresApi(Build.VERSION_CODES.M)
     private fun videoCall(id: String)
     {
@@ -170,38 +204,57 @@ class FullscreenActivity : AppCompatActivity() {
         startActivity(i)
     }
 
-    /**
-     * Start whatsapp call with selected contact
-     */
+    /** BUTTON LISTENERS **/
+
     @RequiresApi(Build.VERSION_CODES.M)
     private val mStartWhatsapp = View.OnClickListener { _ ->
         // Get contact uid
-        if(::selectedPerson.isInitialized) {
-            if(selectedPerson.myVideoId != "")
-            {
-                videoCall(selectedPerson.myVideoId)
-            }
-            else if(selectedPerson.myVoipId != "")
-            {
-                voipCall(selectedPerson.myVoipId)
-            }
+        if(whatsappContacts[contactPos].myVideoId != "")
+        {
+            videoCall(whatsappContacts[contactPos].myVideoId)
+        }
+        else if(whatsappContacts[contactPos].myVoipId != "")
+        {
+            voipCall(whatsappContacts[contactPos].myVoipId)
         }
 
         false
     }
+
+    private val mScrollLeft = View.OnClickListener { _ ->
+        if(contactPos > 0) contactPos--
+        contactView.suppressLayout(false)
+        contactView.scrollToPosition(contactPos)
+        contactView.suppressLayout(true)
+
+        false
+    }
+
+    private val mScrollRight = View.OnClickListener { _ ->
+        if(contactPos < whatsappContacts.size-1) contactPos++
+        contactView.suppressLayout(false)
+        contactView.scrollToPosition(contactPos)
+        contactView.suppressLayout(true)
+
+        false
+    }
+
+    /** CLASS OVERRIDES **/
 
     @RequiresApi(Build.VERSION_CODES.M)
     override fun onPostResume() {
         super.onPostResume()
         println("RETURNED FROM WHATSAPP")
 
+        // Let the accessibility service know that whatsapp has closed
         val intent = Intent(FULLSCREEN_ACTIVE)
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
 
+        // Hide overlays
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.hide()
 
-        hideStuff()
+        hideNavigationAndNotification()
     }
 
     @RequiresApi(Build.VERSION_CODES.M)
@@ -212,75 +265,19 @@ class FullscreenActivity : AppCompatActivity() {
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.hide()
 
-        hideStuff()
+        hideNavigationAndNotification()
 
-        // Upon interacting with UI controls, delay any scheduled hide()
-        // operations to prevent the jarring behavior of controls going away
-        // while interacting with the UI.
         call_button.setOnClickListener(mStartWhatsapp)
+        left_button.setOnClickListener(mScrollLeft)
+        right_button.setOnClickListener(mScrollRight)
+
+        clock.timeZone = "GMT+2"
 
         // Check permission for overlay
         if (!Settings.canDrawOverlays(this)) {
             // Check that the user has granted permission, and prompt them if not
             checkDrawOverlayPermission()
         }
-    }
-
-    class person(val id:Long, val displayName:String) {
-        var myId:Long = id
-        var myDisplayName:String = displayName
-        var myThumbnail:String = ""
-        var myVoipId:String = ""
-        var myVideoId:String = ""
-    }
-
-    private val whatsappContacts: MutableList<person> = mutableListOf()
-
-    private val PROJECTION: Array<out String> = arrayOf(
-        ContactsContract.Data._ID,
-        ContactsContract.Data.DISPLAY_NAME,
-        ContactsContract.Data.MIMETYPE,
-        ContactsContract.Data.PHOTO_URI
-    )
-
-    class PersonAdapter(private val context: Context,
-                        private val dataSource: MutableList<person>): BaseAdapter() {
-        private val inflater: LayoutInflater
-                = context.getSystemService(Context.LAYOUT_INFLATER_SERVICE) as LayoutInflater
-
-        override fun getCount(): Int {
-            return dataSource.size
-        }
-
-        override fun getItem(position: Int): Any {
-            return dataSource[position]
-        }
-
-        override fun getItemId(position: Int): Long {
-            return position.toLong()
-        }
-
-        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-            // Get view for row item
-            val rowView = inflater.inflate(R.layout.list_item_recipe, parent, false)
-            // Get title element
-            val titleTextView = rowView.findViewById(R.id.recipe_list_title) as TextView
-            // Get thumbnail element
-            val thumbnailImageView = rowView.findViewById(R.id.recipe_list_thumbnail) as ImageView
-
-            // 1
-            val recipe = getItem(position) as person
-
-            titleTextView.text = recipe.myDisplayName
-            if(recipe.myThumbnail != "") {
-                thumbnailImageView.setImageURI(recipe.myThumbnail.toUri())
-            } else {
-                thumbnailImageView.setImageResource(android.R.color.transparent)
-            }
-
-            return rowView
-        }
-
     }
 
     override fun onPostCreate(savedInstanceState: Bundle?) {
@@ -307,11 +304,11 @@ class FullscreenActivity : AppCompatActivity() {
 
             if (mimeType == "vnd.android.cursor.item/vnd.com.whatsapp.voip.call" || mimeType == "vnd.android.cursor.item/vnd.com.whatsapp.video.call") {
                 // Check if it exists in the list already
-                var next: person? = whatsappContacts.find{ it.myDisplayName == displayName }
+                var next: contact? = whatsappContacts.find{ it.myDisplayName == displayName }
 
                 // If not, add it in
                 if(next == null) {
-                    next = person(id, displayName)
+                    next = contact(id, displayName)
                     if(thumbnail != null) next!!.myThumbnail = thumbnail
                     whatsappContacts.add(next)
                 }
@@ -334,13 +331,12 @@ class FullscreenActivity : AppCompatActivity() {
         }
 
         // Populate list
-        listView = findViewById<ListView>(R.id.name_list)
-        val adapter = PersonAdapter(this, whatsappContacts)
-        listView.adapter = adapter
-        listView.onItemClickListener = AdapterView.OnItemClickListener { parent, view, position, id ->
-            // This is your listview's selected item
-            selectedPerson = parent.getItemAtPosition(position) as person
-        }
+        val adapter = ContactAdapter(whatsappContacts)
+        contactView = findViewById<RecyclerView>(R.id.name_list)
+        contactView.adapter = adapter
+
+        // Suppress the layout to prevent scrolling
+        contactView.suppressLayout(true)
 
         // Start automation service
         if (!isAccessibilityOn(this, AutomationService::class.java)) {
@@ -350,40 +346,61 @@ class FullscreenActivity : AppCompatActivity() {
         }
     }
 
-    private fun isAccessibilityOn(context: Context, clazz: Class<out AccessibilityService?>): Boolean {
-        var accessibilityEnabled = 0
-        val service = context.packageName + "/" + clazz.canonicalName
-        try {
-            accessibilityEnabled = Settings.Secure.getInt(
-                context.applicationContext.contentResolver,
-                Settings.Secure.ACCESSIBILITY_ENABLED
-            )
-        } catch (ignored: SettingNotFoundException) {
-        }
-        val colonSplitter = SimpleStringSplitter(':')
-        if (accessibilityEnabled == 1) {
-            val settingValue = Settings.Secure.getString(
-                context.applicationContext.contentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            )
-            if (settingValue != null) {
-                colonSplitter.setString(settingValue)
-                while (colonSplitter.hasNext()) {
-                    val accessibilityService = colonSplitter.next()
-                    if (accessibilityService.equals(service, ignoreCase = true)) {
-                        return true
-                    }
-                }
-            }
-        }
-        return false
+    /** WHATSAPP CONTACT LISTING **/
+
+    class contact(val id:Long, val displayName:String) {
+        var myId:Long = id
+        var myDisplayName:String = displayName
+        var myThumbnail:String = ""
+        var myVoipId:String = ""
+        var myVideoId:String = ""
     }
 
+    private val whatsappContacts: MutableList<contact> = mutableListOf()
+
+    private val PROJECTION: Array<out String> = arrayOf(
+        ContactsContract.Data._ID,
+        ContactsContract.Data.DISPLAY_NAME,
+        ContactsContract.Data.MIMETYPE,
+        ContactsContract.Data.PHOTO_URI
+    )
+
+    class ContactAdapter(private val dataSource: MutableList<contact>): RecyclerView.Adapter<ContactAdapter.ContactViewHolder>() {
+
+        class ContactViewHolder(contactView: LinearLayout) : RecyclerView.ViewHolder(contactView) {
+            val contactView: LinearLayout = contactView
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ContactViewHolder {
+            val contactView = LayoutInflater.from(parent.context).inflate(R.layout.contact, parent, false) as LinearLayout
+
+            return ContactViewHolder(contactView)
+        }
+
+        override fun onBindViewHolder(holder: ContactViewHolder, position: Int) {
+            val titleTextView = holder.contactView.findViewById(R.id.contact_title) as TextView
+            val thumbnailImageView = holder.contactView.findViewById(R.id.contact_thumbnail) as ImageView
+
+            val curContact = dataSource[position]
+
+            titleTextView.text = curContact.myDisplayName
+            if(curContact.myThumbnail != "") {
+                thumbnailImageView.setImageURI(curContact.myThumbnail.toUri())
+            } else {
+                thumbnailImageView.setImageResource(android.R.color.transparent)
+            }
+        }
+
+        override fun getItemCount() = dataSource.size
+
+    }
+
+    /** COMPANIONS **/
 
     companion object {
-        private val MY_PERMISSIONS_REQUEST_CONTACTS = 0
-        private val MY_PERMISSIONS_REQUEST_CALL_PHONE = 1
+        private const val MY_PERMISSIONS_REQUEST_CONTACTS = 0
+        private const val MY_PERMISSIONS_REQUEST_CALL_PHONE = 1
         private const val REQUEST_CODE = 10101
-        val FULLSCREEN_ACTIVE = "fullscreen_active"
+        const val FULLSCREEN_ACTIVE = "fullscreen_active"
     }
 }

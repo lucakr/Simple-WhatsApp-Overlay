@@ -8,21 +8,15 @@ import android.content.IntentFilter
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
-import android.os.SystemClock
 import android.util.Log
 import android.view.LayoutInflater
-import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.view.WindowManager.LayoutParams
-import android.view.accessibility.AccessibilityNodeInfo
 import androidx.annotation.RequiresApi
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 
 
-/**
- * Created by noln on 22/09/2019.
- */
 class OverlayService : Service() {
     private lateinit var windowManager: WindowManager
     private var floatyView: View? = null
@@ -173,9 +167,9 @@ class OverlayService : Service() {
 
     companion object {
         private val OVERLAY_TAG = OverlayService::class.java.simpleName
-        val OVERLAY_END_BTN_ACTION = "overlay_end_btn"
-        val OVERLAY_START_BTN_ACTION = "overlay_start_btn"
-        val OVERLAY_DESTROY_ACTION = "overlay_destroy"
-        val OVERLAY_POST_DESTROY = "overlay_destroy_done"
+        const val OVERLAY_END_BTN_ACTION = "overlay_end_btn"
+        const val OVERLAY_START_BTN_ACTION = "overlay_start_btn"
+        const val OVERLAY_DESTROY_ACTION = "overlay_destroy"
+        const val OVERLAY_POST_DESTROY = "overlay_destroy_done"
     }
 }
