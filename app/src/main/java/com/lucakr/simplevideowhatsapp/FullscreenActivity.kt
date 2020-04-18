@@ -3,8 +3,14 @@ package com.lucakr.simplevideowhatsapp
 import android.Manifest.permission.CALL_PHONE
 import android.Manifest.permission.READ_CONTACTS
 import android.accessibilityservice.AccessibilityService
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -12,19 +18,21 @@ import android.os.Bundle
 import android.provider.ContactsContract
 import android.provider.Settings
 import android.provider.Settings.SettingNotFoundException
-import android.text.Layout
 import android.text.TextUtils.SimpleStringSplitter
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.*
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import kotlinx.android.synthetic.main.activity_fullscreen.*
 
@@ -36,6 +44,8 @@ import kotlinx.android.synthetic.main.activity_fullscreen.*
 class FullscreenActivity : AppCompatActivity() {
     private lateinit var contactView:RecyclerView
     private var contactPos = 0
+    private var notificationManager: NotificationManager? = null
+    private var notification: Notification?= null
 
     fun hideNavigationAndNotification() {
         name_list.systemUiVisibility =
@@ -109,7 +119,7 @@ class FullscreenActivity : AppCompatActivity() {
                 } else {
                     // permission denied, boo! Disable the
                     // functionality that depends on this permission.
-                    requestCallPhone();
+                    requestCallPhone()
                 }
                 return
             }
@@ -122,7 +132,7 @@ class FullscreenActivity : AppCompatActivity() {
                 } else {
                     // permission denied, boo! Disable the
                     // functionality that depends on this permission.
-                    requestContacts();
+                    requestContacts()
                 }
                 return
             }
@@ -257,7 +267,7 @@ class FullscreenActivity : AppCompatActivity() {
         hideNavigationAndNotification()
     }
 
-    @RequiresApi(Build.VERSION_CODES.M)
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -293,7 +303,7 @@ class FullscreenActivity : AppCompatActivity() {
         val cursor = contentResolver.query(
             ContactsContract.Data.CONTENT_URI,
             PROJECTION, null, null,
-            ContactsContract.Contacts.DISPLAY_NAME);
+            ContactsContract.Contacts.DISPLAY_NAME)
 
         // Parse to find valid whatsapp contacts and add to secondary array
         while(cursor!!.moveToNext()) {
@@ -309,7 +319,7 @@ class FullscreenActivity : AppCompatActivity() {
                 // If not, add it in
                 if(next == null) {
                     next = contact(id, displayName)
-                    if(thumbnail != null) next!!.myThumbnail = thumbnail
+                    if(thumbnail != null) next.myThumbnail = thumbnail
                     whatsappContacts.add(next)
                 }
 
@@ -318,10 +328,10 @@ class FullscreenActivity : AppCompatActivity() {
 
                 // Update the relevant id
                 if (mimeType == "vnd.android.cursor.item/vnd.com.whatsapp.voip.call") {
-                    next!!.myVoipId = id.toString()
+                    next.myVoipId = id.toString()
                 }
                 else{
-                    next!!.myVideoId = id.toString()
+                    next.myVideoId = id.toString()
                 }
 
                 // Correct the entry
@@ -402,5 +412,6 @@ class FullscreenActivity : AppCompatActivity() {
         private const val MY_PERMISSIONS_REQUEST_CALL_PHONE = 1
         private const val REQUEST_CODE = 10101
         const val FULLSCREEN_ACTIVE = "fullscreen_active"
+        private const val NOTIFICATION_CHANNEL_ID = "com.lucakr.simplevideowhatsapp.headsupblocker"
     }
 }

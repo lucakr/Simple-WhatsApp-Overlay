@@ -20,15 +20,28 @@ import androidx.localbroadcastmanager.content.LocalBroadcastManager
 class OverlayService : Service() {
     private lateinit var windowManager: WindowManager
     private var floatyView: View? = null
+    private var overlayActive: Boolean = false
 
     private val bReceiver: BroadcastReceiver = object : BroadcastReceiver() {
         @RequiresApi(Build.VERSION_CODES.P)
         override fun onReceive(context: Context, intent: Intent) {
             // Check the intent is for us
-            println("Got broadcast in overlay")
-            if(intent.action == OVERLAY_DESTROY_ACTION)
-            {
-                onDestroy()
+            if(overlayActive) {
+                overlayActive = false
+
+                println("Got broadcast in overlay")
+                if (intent.action == OVERLAY_DESTROY_ACTION) {
+                    // Kill the answer/decline overlay
+                    floatyView?.let {
+                        windowManager.removeView(it)
+                        floatyView = null
+                    }
+
+                    sendDestroyed()
+                } else if (intent.action == OVERLAY_POST_ACCEPT_CALL) {
+                    // Start the end overlay
+                    addOverlayView("end")
+                }
             }
         }
     }
@@ -55,7 +68,9 @@ class OverlayService : Service() {
         super.onCreate()
 
         // Setup Broadcast Receiver
-        val filter = IntentFilter(OVERLAY_DESTROY_ACTION)
+        val filter = IntentFilter(OVERLAY_DESTROY_ACTION).apply {
+            addAction(OVERLAY_POST_ACCEPT_CALL)
+        }
         LocalBroadcastManager.getInstance(this).registerReceiver(bReceiver, filter)
 
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -103,6 +118,8 @@ class OverlayService : Service() {
         } ?: run {
             Log.e(OVERLAY_TAG, "Layout Inflater Service is null; can't inflate and display R.layout.floating_view")
         }
+
+        overlayActive = true;
     }
 
     private fun sendDestroyed() {
@@ -115,20 +132,23 @@ class OverlayService : Service() {
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
     }
 
-    private fun sendStartBtn() {
-        val intent = Intent(OVERLAY_START_BTN_ACTION)
+    private fun sendDeclineBtn() {
+        val intent = Intent(OVERLAY_DECLINE_BTN_ACTION)
+        LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
+    }
+
+    private fun sendAnswerBtn() {
+        val intent = Intent(OVERLAY_ANSWER_BTN_ACTION)
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
     }
 
     @RequiresApi(Build.VERSION_CODES.P)
     override fun onDestroy() {
         super.onDestroy()
-
-        sendDestroyed()
     }
 
     @RequiresApi(Build.VERSION_CODES.P)
-    public fun declineButtonPress(view: View) {
+    fun declineButtonPress(view: View) {
         // Kill the current overlay
         floatyView?.let {
             windowManager.removeView(it)
@@ -136,25 +156,22 @@ class OverlayService : Service() {
         }
 
         // Decline
-        sendEndBtn()
+        sendDeclineBtn()
     }
 
-    public fun answerButtonPress(view: View) {
-        // Kill the answer/decline overlay
+    fun answerButtonPress(view: View) {
+        // Kill the current overlay
         floatyView?.let {
             windowManager.removeView(it)
             floatyView = null
         }
 
         // Answer
-        sendStartBtn()
-
-        // Start the end overlay
-        addOverlayView("end")
+        sendAnswerBtn()
     }
 
     @RequiresApi(Build.VERSION_CODES.P)
-    public fun endButtonPress(view: View) {
+    fun endButtonPress(view: View) {
         // Kill the current overlay
         floatyView?.let {
             windowManager.removeView(it)
@@ -168,8 +185,10 @@ class OverlayService : Service() {
     companion object {
         private val OVERLAY_TAG = OverlayService::class.java.simpleName
         const val OVERLAY_END_BTN_ACTION = "overlay_end_btn"
-        const val OVERLAY_START_BTN_ACTION = "overlay_start_btn"
+        const val OVERLAY_ANSWER_BTN_ACTION = "overlay_answer_btn"
+        const val OVERLAY_DECLINE_BTN_ACTION = "overlay_decline_btn"
         const val OVERLAY_DESTROY_ACTION = "overlay_destroy"
         const val OVERLAY_POST_DESTROY = "overlay_destroy_done"
+        const val OVERLAY_POST_ACCEPT_CALL = "overlay_accept_done"
     }
 }
