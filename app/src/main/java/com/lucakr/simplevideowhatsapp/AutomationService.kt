@@ -37,6 +37,12 @@ class AutomationService : AccessibilityService() {
     private lateinit var declineCallBtn: List<AccessibilityNodeInfoCompat>
     private val mainContext = this
 
+    enum class State {
+        CLOSED, PENDING_CLOSURE, CALLING, ACTIVE, INCOMING, UNANSWERED
+    }
+
+    private var whatsappState = State.CLOSED
+
     @RequiresApi(Build.VERSION_CODES.N)
     private fun clickPoint(x: Float, y: Float) {
         val dragUpPath = Path().apply {
@@ -243,6 +249,74 @@ class AutomationService : AccessibilityService() {
 
         if(event!!.packageName != "com.whatsapp") {
             return
+        }
+
+        if(event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+            val nodeInfoList = AccessibilityNodeInfoCompat.wrap(rootInActiveWindow)
+
+            when(whatsappState) {
+                State.CLOSED -> {
+                    // Something in whatsapp has just opened
+                    // It should be either a CALLING or INCOMING
+                    val callStatus = nodeInfoList.findAccessibilityNodeInfosByViewId("com.whatsapp:id/call_status")
+
+                    if(callStatus.isNotEmpty() && (callStatus[0].text == "CALLING" || callStatus[0].text == "RINGING")) {
+                        // Start the calling overlay
+
+                        whatsappState = State.CALLING
+                    } else {
+                        // Start the INCOMING overlay
+
+                        whatsappState = State.INCOMING
+                    }
+                }
+
+                State.CALLING -> {
+                    // Can only mean we've closed or gone to active
+                    val callStatus = nodeInfoList.findAccessibilityNodeInfosByViewId("com.whatsapp:id/call_status")
+                    endCallBtn = nodeInfoList.findAccessibilityNodeInfosByViewId("com.whatsapp:id/end_call_btn")
+
+                    if(callStatus.isEmpty()) {
+                        if (endCallBtn.isEmpty()) {
+                            whatsappState = State.PENDING_CLOSURE
+                        } else {
+                            whatsappState = State.ACTIVE
+                        }
+                    } else {
+                        println("Unknown occurance")
+                    }
+                }
+
+                State.ACTIVE -> {
+
+                }
+
+                State.INCOMING -> {
+
+                }
+
+                State.UNANSWERED -> {
+
+                }
+
+                else -> {
+                    println("Shouldn't get here")
+                    whatsappState = State.CLOSED
+                }
+            }
+
+            val nodeInfoList2 = AccessibilityNodeInfoCompat.wrap(rootInActiveWindow)
+
+            if(nodeInfoList2.findAccessibilityNodeInfosByViewId("com.whatsapp:id/end_call_btn").isNotEmpty()) {
+                state = "active"
+            } else if(nodeInfoList2.findAccessibilityNodeInfosByViewId("com.whatsapp:id/accept_incoming_call_view").isNotEmpty() && nodeInfoList2.findAccessibilityNodeInfosByViewId("com.whatsapp:id/decline_incoming_call_view").isNotEmpty()) {
+                state = "incoming"
+            } else if(nodeInfoList2.findAccessibilityNodeInfosByViewId("com.whatsapp:id/call_back_btn").isNotEmpty()) {
+                state = "unanswered"
+            }
+
+            println(state.toString())
+
         }
 
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED && !whatsappOpen) {
