@@ -46,6 +46,34 @@
             tools:src="@mipmap/ic_launcher"
             android:layout_marginLeft="2dp" />
 
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fitsSystemWindows="false">
+
+            <LinearLayout
+                style="?metaButtonBarStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|center_horizontal"
+                android:background="0x00ffffff"
+                android:orientation="horizontal"
+                tools:ignore="UselessParent">
+
+                <Button
+                    android:id="@+id/end_button"
+                    style="?metaButtonBarButtonStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="70dp"
+                    android:layout_weight="1"
+                    android:background="@color/red_overlay"
+                    android:textSize="40sp"
+                    android:text="@string/end_button"/>
+
+            </LinearLayout>
+
+        </FrameLayout>
+
     </LinearLayout>
 
 </FrameLayout>

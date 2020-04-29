@@ -183,8 +183,8 @@ class OverlayService : Service() {
                 }
 
                 ACTION_END_CALL-> {
-                    // Only possible when in call
-                    if(state == WhatsAppState.IN_CALL) {
+                    // Only possible when in call or calling
+                    if(state == WhatsAppState.IN_CALL || state == WhatsAppState.CALLING) {
                         // Trigger end call button
                         sendEndCall()
 
@@ -316,6 +316,8 @@ class OverlayService : Service() {
                 }
             }
             R.layout.calling_overlay -> {
+                activeOverlay!!.findViewById<Button>(R.id.end_button).setOnClickListener{endButtonPress(it)}
+
                 activeOverlay!!.findViewById<TextView>(R.id.caller_name).text = whatsappContacts[contactPos].myDisplayName
                 val callerImage = activeOverlay!!.findViewById<ImageView>(R.id.caller_image) as ImageView
                 if(whatsappContacts[contactPos].myThumbnail != "") {
