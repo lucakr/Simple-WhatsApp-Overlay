@@ -34,6 +34,9 @@ import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.recyclerview.widget.RecyclerView
+import com.lucakr.simplevideowhatsapp.OverlayService.Companion.ACTION_START_VIDEO
+import com.lucakr.simplevideowhatsapp.OverlayService.Companion.ACTION_START_VOIP
+import com.lucakr.simplevideowhatsapp.OverlayService.Companion.CALL_ID
 import kotlinx.android.synthetic.main.activity_fullscreen.*
 
 
@@ -44,8 +47,24 @@ import kotlinx.android.synthetic.main.activity_fullscreen.*
 class FullscreenActivity : AppCompatActivity() {
     private lateinit var contactView:RecyclerView
     private var contactPos = 0
-    private var notificationManager: NotificationManager? = null
-    private var notification: Notification?= null
+
+    private val bReceiver: BroadcastReceiver = object : BroadcastReceiver() {
+        @RequiresApi(Build.VERSION_CODES.P)
+        override fun onReceive(context: Context, intent: Intent) {
+
+            when (intent.action) {
+                ACTION_START_VIDEO -> {
+                    println("Starting Video call")
+                    videoCall(intent.getStringExtra(CALL_ID))
+                }
+
+                ACTION_START_VOIP -> {
+                    println("Starting Voip call")
+                    voipCall(intent.getStringExtra(CALL_ID))
+                }
+            }
+        }
+    }
 
     fun hideNavigationAndNotification() {
         name_list.systemUiVisibility =
@@ -58,6 +77,40 @@ class FullscreenActivity : AppCompatActivity() {
         fullscreen_content_controls.visibility = View.VISIBLE
     }
 
+    /** WHATSAPP INITIATION **/
+
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun videoCall(id: String)
+    {
+        // Setup whatsapp intent
+        val i = Intent(Intent.ACTION_VIEW)
+        i.setDataAndType(
+            Uri.parse("content://com.android.contacts/data/$id"),
+            "vnd.android.cursor.item/vnd.com.whatsapp.video.call"
+        )
+        i.setPackage("com.whatsapp")
+
+        // Can't get here without accepting the permission onCreate
+        println("STARTING WHATSAPP")
+        startActivity(i)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun voipCall(id: String)
+    {
+        // Setup whatsapp intent
+        val i = Intent(Intent.ACTION_VIEW)
+        i.setDataAndType(
+            Uri.parse("content://com.android.contacts/data/$id"),
+            "vnd.android.cursor.item/vnd.com.whatsapp.voip.call"
+        )
+        i.setPackage("com.whatsapp")
+
+        // Can't get here without accepting the permission onCreate
+        println("STARTING WHATSAPP")
+        startActivity(i)
+    }
+
     /** PERMISSION SETUP **/
 
     @RequiresApi(Build.VERSION_CODES.M)
@@ -68,6 +121,20 @@ class FullscreenActivity : AppCompatActivity() {
 
             // If not, form up an Intent to launch the permission request
             val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
+
+            // Launch Intent, with the supplied request code
+            startActivityForResult(intent, REQUEST_CODE)
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.M)
+    private fun checkSettingsPermission() {
+
+        // Checks if app already has permission to draw overlays
+        if (!Settings.System.canWrite(this)) {
+
+            // If not, form up an Intent to launch the permission request
+            val intent = Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:$packageName"))
 
             // Launch Intent, with the supplied request code
             startActivityForResult(intent, REQUEST_CODE)
@@ -174,81 +241,6 @@ class FullscreenActivity : AppCompatActivity() {
         return false
     }
 
-    /** WHATSAPP INITIATION **/
-
-    @RequiresApi(Build.VERSION_CODES.M)
-    private fun videoCall(id: String)
-    {
-        // Try each time just in case
-        requestCallPhone()
-
-        // Setup whatsapp intent
-        val i = Intent(Intent.ACTION_VIEW)
-        i.setDataAndType(
-            Uri.parse("content://com.android.contacts/data/$id"),
-            "vnd.android.cursor.item/vnd.com.whatsapp.video.call"
-        )
-        i.setPackage("com.whatsapp")
-
-        // Can't get here without accepting the permission onCreate
-        println("STARTING WHATSAPP")
-        startActivity(i)
-    }
-
-    @RequiresApi(Build.VERSION_CODES.M)
-    private fun voipCall(id: String)
-    {
-        // Try each time just in case
-        requestCallPhone()
-
-        // Setup whatsapp intent
-        val i = Intent(Intent.ACTION_VIEW)
-        i.setDataAndType(
-            Uri.parse("content://com.android.contacts/data/$id"),
-            "vnd.android.cursor.item/vnd.com.whatsapp.voip.call"
-        )
-        i.setPackage("com.whatsapp")
-
-        // Can't get here without accepting the permission onCreate
-        println("STARTING WHATSAPP")
-        startActivity(i)
-    }
-
-    /** BUTTON LISTENERS **/
-
-    @RequiresApi(Build.VERSION_CODES.M)
-    private val mStartWhatsapp = View.OnClickListener { _ ->
-        // Get contact uid
-        if(whatsappContacts[contactPos].myVideoId != "")
-        {
-            videoCall(whatsappContacts[contactPos].myVideoId)
-        }
-        else if(whatsappContacts[contactPos].myVoipId != "")
-        {
-            voipCall(whatsappContacts[contactPos].myVoipId)
-        }
-
-        false
-    }
-
-    private val mScrollLeft = View.OnClickListener { _ ->
-        if(contactPos > 0) contactPos--
-        contactView.suppressLayout(false)
-        contactView.scrollToPosition(contactPos)
-        contactView.suppressLayout(true)
-
-        false
-    }
-
-    private val mScrollRight = View.OnClickListener { _ ->
-        if(contactPos < whatsappContacts.size-1) contactPos++
-        contactView.suppressLayout(false)
-        contactView.scrollToPosition(contactPos)
-        contactView.suppressLayout(true)
-
-        false
-    }
-
     /** CLASS OVERRIDES **/
 
     @RequiresApi(Build.VERSION_CODES.M)
@@ -257,8 +249,7 @@ class FullscreenActivity : AppCompatActivity() {
         println("RETURNED FROM WHATSAPP")
 
         // Let the accessibility service know that whatsapp has closed
-        val intent = Intent(FULLSCREEN_ACTIVE)
-        LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
+        LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(ACTION_MAIN_ACTIVITY_RESUMED))
 
         // Hide overlays
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
@@ -271,23 +262,26 @@ class FullscreenActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Setup Broadcast Receiver
+        val filter = IntentFilter(ACTION_START_VIDEO).apply {
+            addAction(ACTION_START_VOIP)
+        }
+
+        LocalBroadcastManager.getInstance(this).registerReceiver(bReceiver, filter)
+
         setContentView(R.layout.activity_fullscreen)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.hide()
 
         hideNavigationAndNotification()
 
-        call_button.setOnClickListener(mStartWhatsapp)
-        left_button.setOnClickListener(mScrollLeft)
-        right_button.setOnClickListener(mScrollRight)
-
-        clock.timeZone = "GMT+2"
+        // Start the overlay service
+        val overlaySvc = Intent(this, OverlayService::class.java)
+        startService(overlaySvc)
 
         // Check permission for overlay
-        if (!Settings.canDrawOverlays(this)) {
-            // Check that the user has granted permission, and prompt them if not
-            checkDrawOverlayPermission()
-        }
+        checkDrawOverlayPermission()
+
     }
 
     override fun onPostCreate(savedInstanceState: Bundle?) {
@@ -299,110 +293,16 @@ class FullscreenActivity : AppCompatActivity() {
         // Request CALL_PHONE
         requestCallPhone()
 
-        // Get contacts
-        val cursor = contentResolver.query(
-            ContactsContract.Data.CONTENT_URI,
-            PROJECTION, null, null,
-            ContactsContract.Contacts.DISPLAY_NAME)
-
-        // Parse to find valid whatsapp contacts and add to secondary array
-        while(cursor!!.moveToNext()) {
-            val id:Long = cursor.getLong(cursor.getColumnIndex(ContactsContract.Data._ID))
-            val displayName:String = cursor.getString(cursor.getColumnIndex(ContactsContract.Data.DISPLAY_NAME))
-            val mimeType:String =  cursor.getString(cursor.getColumnIndex(ContactsContract.Data.MIMETYPE))
-            val thumbnail = cursor.getString(cursor.getColumnIndex(ContactsContract.Data.PHOTO_URI))
-
-            if (mimeType == "vnd.android.cursor.item/vnd.com.whatsapp.voip.call" || mimeType == "vnd.android.cursor.item/vnd.com.whatsapp.video.call") {
-                // Check if it exists in the list already
-                var next: contact? = whatsappContacts.find{ it.myDisplayName == displayName }
-
-                // If not, add it in
-                if(next == null) {
-                    next = contact(id, displayName)
-                    if(thumbnail != null) next.myThumbnail = thumbnail
-                    whatsappContacts.add(next)
-                }
-
-                // Get the index of the old or new entry
-                val index = whatsappContacts.indexOf(next)
-
-                // Update the relevant id
-                if (mimeType == "vnd.android.cursor.item/vnd.com.whatsapp.voip.call") {
-                    next.myVoipId = id.toString()
-                }
-                else{
-                    next.myVideoId = id.toString()
-                }
-
-                // Correct the entry
-                whatsappContacts[index] = next
-            }
-
-        }
-
-        // Populate list
-        val adapter = ContactAdapter(whatsappContacts)
-        contactView = findViewById<RecyclerView>(R.id.name_list)
-        contactView.adapter = adapter
-
-        // Suppress the layout to prevent scrolling
-        contactView.suppressLayout(true)
-
         // Start automation service
         if (!isAccessibilityOn(this, AutomationService::class.java)) {
             val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
             startActivity(intent)
             return
         }
-    }
 
-    /** WHATSAPP CONTACT LISTING **/
-
-    class contact(val id:Long, val displayName:String) {
-        var myId:Long = id
-        var myDisplayName:String = displayName
-        var myThumbnail:String = ""
-        var myVoipId:String = ""
-        var myVideoId:String = ""
-    }
-
-    private val whatsappContacts: MutableList<contact> = mutableListOf()
-
-    private val PROJECTION: Array<out String> = arrayOf(
-        ContactsContract.Data._ID,
-        ContactsContract.Data.DISPLAY_NAME,
-        ContactsContract.Data.MIMETYPE,
-        ContactsContract.Data.PHOTO_URI
-    )
-
-    class ContactAdapter(private val dataSource: MutableList<contact>): RecyclerView.Adapter<ContactAdapter.ContactViewHolder>() {
-
-        class ContactViewHolder(contactView: LinearLayout) : RecyclerView.ViewHolder(contactView) {
-            val contactView: LinearLayout = contactView
-        }
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ContactViewHolder {
-            val contactView = LayoutInflater.from(parent.context).inflate(R.layout.contact, parent, false) as LinearLayout
-
-            return ContactViewHolder(contactView)
-        }
-
-        override fun onBindViewHolder(holder: ContactViewHolder, position: Int) {
-            val titleTextView = holder.contactView.findViewById(R.id.contact_title) as TextView
-            val thumbnailImageView = holder.contactView.findViewById(R.id.contact_thumbnail) as ImageView
-
-            val curContact = dataSource[position]
-
-            titleTextView.text = curContact.myDisplayName
-            if(curContact.myThumbnail != "") {
-                thumbnailImageView.setImageURI(curContact.myThumbnail.toUri())
-            } else {
-                thumbnailImageView.setImageResource(android.R.color.transparent)
-            }
-        }
-
-        override fun getItemCount() = dataSource.size
-
+        // Start whatsapp
+        //val launchIntent = packageManager.getLaunchIntentForPackage("com.whatsapp");
+        //startActivity(launchIntent)
     }
 
     /** COMPANIONS **/
@@ -411,7 +311,6 @@ class FullscreenActivity : AppCompatActivity() {
         private const val MY_PERMISSIONS_REQUEST_CONTACTS = 0
         private const val MY_PERMISSIONS_REQUEST_CALL_PHONE = 1
         private const val REQUEST_CODE = 10101
-        const val FULLSCREEN_ACTIVE = "fullscreen_active"
-        private const val NOTIFICATION_CHANNEL_ID = "com.lucakr.simplevideowhatsapp.headsupblocker"
+        const val ACTION_MAIN_ACTIVITY_RESUMED = "main_activity_resumed"
     }
 }

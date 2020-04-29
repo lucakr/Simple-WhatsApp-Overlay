@@ -24,6 +24,7 @@
             tools:ignore="UselessParent">
 
             <TextView
+                android:id="@+id/topmost_view"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="@color/blue_display"
@@ -33,12 +34,14 @@
 
             <TextClock
                 android:id="@+id/clock"
-                android:format12Hour="hh:mm a"
+                android:timeZone="GMT+0200"
+                android:format24Hour="hh:mm"
+                android:format12Hour="@null"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="@color/blue_display"
                 android:gravity="center"
-                android:textSize="40sp" />
+                android:textSize="40sp"/>
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -52,7 +55,7 @@
                     android:layout_width="65sp"
                     android:layout_height="match_parent"
                     android:text="@string/left_btn"
-                    android:textSize="60sp" />
+                    android:textSize="60sp"/>
 
                 <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/name_list"
@@ -68,7 +71,7 @@
                     android:layout_width="65sp"
                     android:layout_height="match_parent"
                     android:text="@string/right_btn"
-                    android:textSize="60sp" />
+                    android:textSize="60sp"/>
 
             </LinearLayout>
 
@@ -80,7 +83,7 @@
                 android:layout_weight="0"
                 android:background="@color/green_overlay"
                 android:text="@string/call_button"
-                android:textSize="50sp" />
+                android:textSize="50sp"/>
 
         </LinearLayout>
     </FrameLayout>
