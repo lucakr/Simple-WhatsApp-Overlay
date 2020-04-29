@@ -27,7 +27,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|center_horizontal"
-            android:background="@color/red_overlay"
+            android:background="0x00ffffff"
             android:orientation="horizontal"
             tools:ignore="UselessParent">
 
@@ -36,12 +36,25 @@
                 style="?metaButtonBarButtonStyle"
                 android:layout_width="0dp"
                 android:layout_height="70dp"
-                android:layout_weight="1"
+                android:layout_weight="0.66"
                 android:background="@color/red_overlay"
                 android:textSize="40sp"
                 android:text="@string/end_button"/>
 
+            <Button
+                android:id="@+id/end_button_edge"
+                style="?metaButtonBarButtonStyle"
+                android:layout_width="0dp"
+                android:layout_height="70dp"
+                android:layout_gravity="bottom"
+                android:layout_weight="0.33"
+                android:background="0x00ffffff"
+                android:orientation="horizontal">
+
+            </Button>
+
         </LinearLayout>
+
     </FrameLayout>
 
 </FrameLayout>

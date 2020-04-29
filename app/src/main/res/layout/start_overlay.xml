@@ -4,54 +4,86 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:background="#00ffffff">
+    android:background="#ffffff">
 
-    <!-- The primary full-screen view. This can be replaced with whatever view
-         is needed to present your content, e.g. VideoView, SurfaceView,
-         TextureView, etc. -->
-    <TextView xmlns:android="http://schemas.android.com/apk/res/android"
-        android:id="@+id/topmost_view"
+    <LinearLayout
+        android:id="@+id/fullscreen_content_controls"
+        style="?metaButtonBarStyle"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:gravity="center"/>
+        android:layout_gravity="center_horizontal"
+        android:orientation="vertical">
 
-    <!-- This FrameLayout insets its children based on system windows using
-         android:fitsSystemWindows. -->
-    <FrameLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:fitsSystemWindows="false">
-
-        <LinearLayout
-            style="?metaButtonBarStyle"
+        <TextView
+            android:id="@+id/topmost_view"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_gravity="bottom|center_horizontal"
-            android:background="@color/red_overlay"
-            android:orientation="horizontal"
-            tools:ignore="UselessParent">
+            android:background="@color/blue_display"
+            android:gravity="center"
+            android:textSize="30sp"
+            android:text="Incoming call from"/>
 
-            <Button
-                android:id="@+id/decline_button"
-                style="?metaButtonBarButtonStyle"
-                android:layout_width="0dp"
-                android:layout_height="70dp"
-                android:layout_weight="1"
+        <TextView
+            android:id="@+id/caller_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/blue_display"
+            android:gravity="center"
+            android:textSize="30sp"
+            android:text="Unknown"/>
+
+        <ImageView
+            android:id="@+id/caller_image"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:adjustViewBounds="true"
+            android:layout_marginBottom="2dp"
+            android:layout_marginStart="2dp"
+            android:layout_marginTop="50dp"
+            android:contentDescription="Thumbnail"
+            android:scaleType="fitCenter"
+            tools:src="@mipmap/ic_launcher"
+            android:layout_marginLeft="2dp" />
+
+        <!-- This FrameLayout insets its children based on system windows using
+             android:fitsSystemWindows. -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fitsSystemWindows="false">
+
+            <LinearLayout
+                style="?metaButtonBarStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|center_horizontal"
                 android:background="@color/red_overlay"
-                android:textSize="40sp"
-                android:text="@string/decline_button"/>
+                android:orientation="horizontal"
+                tools:ignore="UselessParent">
 
-            <Button
-                android:id="@+id/answer_button"
-                style="?metaButtonBarButtonStyle"
-                android:layout_width="0dp"
-                android:layout_height="70dp"
-                android:layout_weight="1"
-                android:background="@color/green_overlay"
-                android:textSize="40sp"
-                android:text="@string/answer_button"/>
+                <Button
+                    android:id="@+id/decline_button"
+                    style="?metaButtonBarButtonStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="70dp"
+                    android:layout_weight="1"
+                    android:background="@color/red_overlay"
+                    android:textSize="40sp"
+                    android:text="@string/decline_button"/>
 
-        </LinearLayout>
-    </FrameLayout>
+                <Button
+                    android:id="@+id/answer_button"
+                    style="?metaButtonBarButtonStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="70dp"
+                    android:layout_weight="1"
+                    android:background="@color/green_overlay"
+                    android:textSize="40sp"
+                    android:text="@string/answer_button"/>
+
+            </LinearLayout>
+        </FrameLayout>
+
+    </LinearLayout>
 
 </FrameLayout>

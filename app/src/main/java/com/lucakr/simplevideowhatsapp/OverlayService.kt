@@ -301,10 +301,19 @@ class OverlayService : Service() {
             }
             R.layout.end_overlay -> {
                 activeOverlay!!.findViewById<Button>(R.id.end_button).setOnClickListener{endButtonPress(it)}
+                activeOverlay!!.findViewById<Button>(R.id.end_button_edge).setOnClickListener{endButtonPress(it)}
             }
             R.layout.start_overlay -> {
                 activeOverlay!!.findViewById<Button>(R.id.decline_button).setOnClickListener{declineButtonPress(it)}
                 activeOverlay!!.findViewById<Button>(R.id.answer_button).setOnClickListener{answerButtonPress(it)}
+
+                activeOverlay!!.findViewById<TextView>(R.id.caller_name).text = whatsappContacts[contactPos].myDisplayName
+                val callerImage = activeOverlay!!.findViewById<ImageView>(R.id.caller_image) as ImageView
+                if(whatsappContacts[contactPos].myThumbnail != "") {
+                    callerImage.setImageURI(whatsappContacts[contactPos].myThumbnail.toUri())
+                } else {
+                    callerImage.setImageResource(android.R.color.transparent)
+                }
             }
             R.layout.calling_overlay -> {
                 activeOverlay!!.findViewById<TextView>(R.id.caller_name).text = whatsappContacts[contactPos].myDisplayName
