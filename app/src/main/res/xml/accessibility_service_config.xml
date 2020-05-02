@@ -2,7 +2,7 @@
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/accessibility_service_description"
     android:packageNames="com.whatsapp"
-    android:accessibilityEventTypes="typeWindowContentChanged"
+    android:accessibilityEventTypes="typeWindowContentChanged|typeNotificationStateChanged|typeWindowStateChanged"
     android:accessibilityFlags="flagReportViewIds|flagDefault"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:notificationTimeout="100"

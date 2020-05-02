@@ -38,6 +38,7 @@ import com.lucakr.simplevideowhatsapp.OverlayService.Companion.ACTION_START_VIDE
 import com.lucakr.simplevideowhatsapp.OverlayService.Companion.ACTION_START_VOIP
 import com.lucakr.simplevideowhatsapp.OverlayService.Companion.CALL_ID
 import kotlinx.android.synthetic.main.activity_fullscreen.*
+import kotlinx.android.synthetic.main.default_activity.*
 
 
 /**
@@ -45,8 +46,8 @@ import kotlinx.android.synthetic.main.activity_fullscreen.*
  * status bar and navigation/system bar) with user interaction.
  */
 class FullscreenActivity : AppCompatActivity() {
-    private lateinit var contactView:RecyclerView
-    private var contactPos = 0
+    private var callPhoneGranted = false
+    private var requestContactsGranted = false
 
     private val bReceiver: BroadcastReceiver = object : BroadcastReceiver() {
         @RequiresApi(Build.VERSION_CODES.P)
@@ -67,14 +68,14 @@ class FullscreenActivity : AppCompatActivity() {
     }
 
     fun hideNavigationAndNotification() {
-        name_list.systemUiVisibility =
+        default_backing.systemUiVisibility =
             View.SYSTEM_UI_FLAG_LOW_PROFILE or
                     View.SYSTEM_UI_FLAG_FULLSCREEN or
                     View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
                     View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
                     View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
                     View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-        fullscreen_content_controls.visibility = View.VISIBLE
+        default_backing.visibility = View.VISIBLE
     }
 
     /** WHATSAPP INITIATION **/
@@ -162,6 +163,8 @@ class FullscreenActivity : AppCompatActivity() {
             // MY_PERMISSIONS_REQUEST_READ_CONTACTS is an
             // app-defined int constant. The callback method gets the
             // result of the request.
+        } else {
+            callPhoneGranted = true
         }
     }
 
@@ -172,6 +175,8 @@ class FullscreenActivity : AppCompatActivity() {
             // MY_PERMISSIONS_REQUEST_READ_CONTACTS is an
             // app-defined int constant. The callback method gets the
             // result of the request.
+        } else {
+            requestContactsGranted = true
         }
     }
 
@@ -183,11 +188,9 @@ class FullscreenActivity : AppCompatActivity() {
                 if ((grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
                     // permission was granted, yay! Do the
                     // contacts-related task you need to do
-                } else {
-                    // permission denied, boo! Disable the
-                    // functionality that depends on this permission.
-                    requestCallPhone()
+                    callPhoneGranted = true
                 }
+
                 return
             }
 
@@ -196,11 +199,9 @@ class FullscreenActivity : AppCompatActivity() {
                 if ((grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
                     // permission was granted, yay! Do the
                     // contacts-related task you need to do
-                } else {
-                    // permission denied, boo! Disable the
-                    // functionality that depends on this permission.
-                    requestContacts()
+                    requestContactsGranted = true
                 }
+
                 return
             }
 
@@ -269,7 +270,7 @@ class FullscreenActivity : AppCompatActivity() {
 
         LocalBroadcastManager.getInstance(this).registerReceiver(bReceiver, filter)
 
-        setContentView(R.layout.activity_fullscreen)
+        setContentView(R.layout.default_activity)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.hide()
 
@@ -279,6 +280,24 @@ class FullscreenActivity : AppCompatActivity() {
         val overlaySvc = Intent(this, OverlayService::class.java)
         startService(overlaySvc)
 
+        // Request READ_CONTACTS
+        requestContacts()
+
+        // Request CALL_PHONE
+        requestCallPhone()
+
+        while(!callPhoneGranted && !requestContactsGranted) {
+            Thread.sleep(100)
+
+            if(!callPhoneGranted) {
+                requestCallPhone()
+            }
+
+            if(!requestContactsGranted) {
+                requestContacts()
+            }
+        }
+
         // Check permission for overlay
         checkDrawOverlayPermission()
 
@@ -286,12 +305,6 @@ class FullscreenActivity : AppCompatActivity() {
 
     override fun onPostCreate(savedInstanceState: Bundle?) {
         super.onPostCreate(savedInstanceState)
-
-        // Request READ_CONTACTS
-        requestContacts()
-
-        // Request CALL_PHONE
-        requestCallPhone()
 
         // Start automation service
         if (!isAccessibilityOn(this, AutomationService::class.java)) {

@@ -9,10 +9,14 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.PixelFormat
 import android.os.Build
+import android.os.CountDownTimer
 import android.os.IBinder
 import android.provider.ContactsContract
 import android.util.Log
-import android.view.*
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.view.WindowManager
 import android.view.WindowManager.LayoutParams
 import android.widget.Button
 import android.widget.ImageView
@@ -30,8 +34,8 @@ import com.lucakr.simplevideowhatsapp.AutomationService.Companion.ACTION_INCOMIN
 import com.lucakr.simplevideowhatsapp.AutomationService.Companion.ACTION_INCOMING_NOTIFICATION_DISAPPEAR
 import com.lucakr.simplevideowhatsapp.AutomationService.Companion.ACTION_UNANSWERED_APPEAR
 import com.lucakr.simplevideowhatsapp.AutomationService.Companion.ACTION_UNDOCUMENTED_VIEW
+import com.lucakr.simplevideowhatsapp.AutomationService.Companion.CHECK
 import com.lucakr.simplevideowhatsapp.FullscreenActivity.Companion.ACTION_MAIN_ACTIVITY_RESUMED
-import org.w3c.dom.Text
 
 
 class OverlayService : Service() {
@@ -59,7 +63,7 @@ class OverlayService : Service() {
 //        startActivity(packageManager.getLaunchIntentForPackage("com.whatsapp"))
 
         // Set default overlay
-        setOverlay(R.layout.activity_fullscreen)
+        //setOverlay(R.layout.activity_fullscreen)
 
         // Go home
         // TODO
@@ -76,22 +80,26 @@ class OverlayService : Service() {
                 ACTION_INCOMING_NOTIFICATION_APPEAR-> {
                     // Don't want to notify of a call if we're already in some form of call
                     if(state == WhatsAppState.CLOSED) {
+                        println("Incoming notification appear")
                         state = WhatsAppState.INCOMING_VIA_NOTIFICATION
                         setOverlay(R.layout.start_overlay)
+                        sendCloseSystemDialogs()
                     }
                 }
 
                 ACTION_INCOMING_NOTIFICATION_DISAPPEAR-> {
                     // Only care about the notification dismissal if we're depending on the notification
                     if(state == WhatsAppState.INCOMING_VIA_NOTIFICATION) {
-                        state = WhatsAppState.CLOSED
-                        removeOverlay()
+                        println("Incoming notification disappear")
+                        //state = WhatsAppState.CLOSED
+                        //removeOverlay()
                     }
                 }
 
                 ACTION_INCOMING_FULLSCREEN_APPEAR-> {
                     // Don't want to notify of a call if we're already in some form of call
                     if(state == WhatsAppState.CLOSED) {
+                        println("Incoming fullscreen appear")
                         state = WhatsAppState.INCOMING_VIA_FULLSCREEN
                         setOverlay(R.layout.start_overlay)
                     }
@@ -99,21 +107,27 @@ class OverlayService : Service() {
 
                 ACTION_UNDOCUMENTED_VIEW-> {
                     // Something else has come up, so purge and reset
-                    reset()
+                    println("Undocumented view")
+                    //reset()
                 }
 
                 ACTION_UNANSWERED_APPEAR-> {
                     // Should only happen from IN_CALL state, but we'll handle it for any state to be safe
+                    println("Unanswered appear")
                     state = WhatsAppState.UNANSWERED
                     setOverlay(R.layout.unanswered_overlay)
                 }
 
                 ACTION_CALLING-> {
+                    if(state == WhatsAppState.CALLING) {
+                        return
+                    }
+
                     // Should only come from closed state, something is wrong if it doesn't
                     if(state == WhatsAppState.CLOSED) {
                         println("Starting calling overlay")
+                        //removeOverlay()
                         setOverlay(R.layout.calling_overlay)
-
                         state = WhatsAppState.CALLING
                     } else {
                         println("Invalid current state for calling")
@@ -122,9 +136,19 @@ class OverlayService : Service() {
                 }
 
                 ACTION_CALL_ACCEPTED-> {
+                    if(state == WhatsAppState.IN_CALL) {
+                        return
+                    }
+
+                    if(state == WhatsAppState.INCOMING_VIA_NOTIFICATION) {
+                        println("We accepted call")
+                        setOverlay(R.layout.end_overlay)
+                        state = WhatsAppState.IN_CALL
+                    }
+
                     if(state == WhatsAppState.CALLING) {
                         println("Call accepted")
-                        // Layout doesn't need to change
+                        setOverlay(R.layout.end_overlay)
                         state = WhatsAppState.IN_CALL
                     } else {
                         println("Invalid current state for call accepted")
@@ -133,8 +157,12 @@ class OverlayService : Service() {
                 }
 
                 ACTION_CALL_DECLINED-> {
+                    if(state == WhatsAppState.CLOSED) {
+                        return
+                    }
+
                     if(state == WhatsAppState.CALLING) {
-                        println("Call accepted")
+                        println("Call declined")
 
                         setOverlay(R.layout.activity_fullscreen)
                         state = WhatsAppState.CLOSED
@@ -151,12 +179,14 @@ class OverlayService : Service() {
                     // Follow up action depends on current state
                     if(state == WhatsAppState.INCOMING_VIA_NOTIFICATION) {
                         // Trigger notification accept button action
+                        println("Accepting notification call")
                         sendAcceptCallViaNotification()
 
-                        state = WhatsAppState.IN_CALL
-                        setOverlay(R.layout.end_overlay)
+                        //state = WhatsAppState.IN_CALL
+                        //setOverlay(R.layout.end_overlay)
                     } else if(state == WhatsAppState.INCOMING_VIA_FULLSCREEN) {
                         // Do swipe up to accept action
+                        println("Accepting fullscreen call")
                         sendAcceptCallViaFullscreen()
 
                         state = WhatsAppState.IN_CALL
@@ -169,12 +199,14 @@ class OverlayService : Service() {
                     // Follow up action depends on current state
                     if(state == WhatsAppState.INCOMING_VIA_NOTIFICATION) {
                         // Trigger notification decline button action
+                        println("Declining notification call")
                         sendDeclineCallViaNotification()
 
-                        state = WhatsAppState.CLOSED
-                        setOverlay(R.layout.activity_fullscreen)
+                        //state = WhatsAppState.CLOSED
+                        //setOverlay(R.layout.activity_fullscreen)
                     } else if(state == WhatsAppState.INCOMING_VIA_FULLSCREEN) {
                         // Do swipe up to decline action
+                        println("Declining fullscreen call")
                         sendDeclineCallViaFullscreen()
 
                         state = WhatsAppState.CLOSED
@@ -186,15 +218,17 @@ class OverlayService : Service() {
                     // Only possible when in call or calling
                     if(state == WhatsAppState.IN_CALL || state == WhatsAppState.CALLING) {
                         // Trigger end call button
+                        println("Ending call")
                         sendEndCall()
 
-                        state = WhatsAppState.CLOSED
-                        setOverlay(R.layout.activity_fullscreen)
+                        //state = WhatsAppState.CLOSED
+                        //setOverlay(R.layout.activity_fullscreen)
                     }
                 }
 
                 ACTION_ACKNOWLEDGE_UNANSWERED-> {
                     // We don't have a way to trigger the "cancel" button, so just reset
+                    println("Unanswered acknowledged")
                     reset()
                 }
 
@@ -209,6 +243,22 @@ class OverlayService : Service() {
                         setOverlay(R.layout.activity_fullscreen)
                     }
 
+                    if(state == WhatsAppState.CALLING) {
+                        // Call most likely declined by other party
+                        println("Resumed main activity while calling")
+
+                        state = WhatsAppState.CLOSED
+                        setOverlay(R.layout.activity_fullscreen)
+                    }
+
+                    if(state == WhatsAppState.INCOMING_VIA_NOTIFICATION) {
+                        // Call most likely declined by other party
+                        println("Resumed main activity while call incoming")
+
+                        state = WhatsAppState.CLOSED
+                        setOverlay(R.layout.activity_fullscreen)
+                    }
+
                     if(state != WhatsAppState.CLOSED) {
                         println("Resumed main activity from unknown state")
                         //reset()
@@ -216,6 +266,18 @@ class OverlayService : Service() {
                 }
             }
         }
+    }
+
+    private val checkTimer = object: CountDownTimer(2000, 2000) {
+        override fun onFinish() {
+            sendCheck()
+            this.start()
+        }
+
+        override fun onTick(millisUntilFinished: Long) {
+
+        }
+
     }
 
     override fun onBind(intent: Intent): IBinder? {
@@ -231,6 +293,8 @@ class OverlayService : Service() {
 
         // Start default overlay
         setOverlay(R.layout.activity_fullscreen)
+
+        checkTimer.start()
 
         return Service.START_STICKY
     }
@@ -295,6 +359,7 @@ class OverlayService : Service() {
                 // Populate the list
                 contactView = activeOverlay!!.findViewById<RecyclerView>(R.id.name_list)
                 contactView.adapter = ContactAdapter(whatsappContacts)
+                contactView.scrollToPosition(contactPos)
 
                 // Suppress the layout to prevent scrolling
                 contactView.suppressLayout(true)
@@ -308,23 +373,17 @@ class OverlayService : Service() {
                 activeOverlay!!.findViewById<Button>(R.id.answer_button).setOnClickListener{answerButtonPress(it)}
 
                 activeOverlay!!.findViewById<TextView>(R.id.caller_name).text = whatsappContacts[contactPos].myDisplayName
-                val callerImage = activeOverlay!!.findViewById<ImageView>(R.id.caller_image) as ImageView
-                if(whatsappContacts[contactPos].myThumbnail != "") {
-                    callerImage.setImageURI(whatsappContacts[contactPos].myThumbnail.toUri())
-                } else {
-                    callerImage.setImageResource(android.R.color.transparent)
-                }
+//                val callerImage = activeOverlay!!.findViewById<ImageView>(R.id.caller_image) as ImageView
+//                if(whatsappContacts[contactPos].myThumbnail != "") {
+//                    callerImage.setImageURI(whatsappContacts[contactPos].myThumbnail.toUri())
+//                } else {
+//                    callerImage.setImageResource(android.R.color.transparent)
+//                }
             }
             R.layout.calling_overlay -> {
                 activeOverlay!!.findViewById<Button>(R.id.end_button).setOnClickListener{endButtonPress(it)}
 
                 activeOverlay!!.findViewById<TextView>(R.id.caller_name).text = whatsappContacts[contactPos].myDisplayName
-                val callerImage = activeOverlay!!.findViewById<ImageView>(R.id.caller_image) as ImageView
-                if(whatsappContacts[contactPos].myThumbnail != "") {
-                    callerImage.setImageURI(whatsappContacts[contactPos].myThumbnail.toUri())
-                } else {
-                    callerImage.setImageResource(android.R.color.transparent)
-                }
             }
             R.layout.unanswered_overlay -> {
                 activeOverlay!!.findViewById<Button>(R.id.ack_unanswered_button).setOnClickListener{ackUnansweredButtonPress(it)}
@@ -353,23 +412,33 @@ class OverlayService : Service() {
         }
     }
 
-    private fun sendAcceptCallViaFullscreen() {
-        val intent = Intent(OVERLAY_NOTIFICATION_ANSWER_BTN_ACTION)
+    private fun sendCheck() {
+        val intent = Intent(CHECK)
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
     }
 
-    private fun sendAcceptCallViaNotification() {
+    private fun sendCloseSystemDialogs() {
+        val closeIntent = Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)
+        LocalBroadcastManager.getInstance(this).sendBroadcast(closeIntent)
+    }
+
+    private fun sendAcceptCallViaFullscreen() {
         val intent = Intent(OVERLAY_FULLSCREEN_ANSWER_BTN_ACTION)
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
     }
 
+    private fun sendAcceptCallViaNotification() {
+        val intent = Intent(OVERLAY_NOTIFICATION_ANSWER_BTN_ACTION)
+        LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
+    }
+
     private fun sendDeclineCallViaFullscreen() {
-        val intent = Intent(OVERLAY_NOTIFICATION_DECLINE_BTN_ACTION)
+        val intent = Intent(OVERLAY_FULLSCREEN_DECLINE_BTN_ACTION)
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
     }
 
     private fun sendDeclineCallViaNotification() {
-        val intent = Intent(OVERLAY_FULLSCREEN_DECLINE_BTN_ACTION)
+        val intent = Intent(OVERLAY_NOTIFICATION_DECLINE_BTN_ACTION)
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
     }
 
@@ -394,18 +463,13 @@ class OverlayService : Service() {
     }
 
     private fun sendStartVideoCall(myVideoId: String) {
-        val intent2 = Intent(ACTION_CALLING)
-        LocalBroadcastManager.getInstance(this).sendBroadcast(intent2)
-
         val intent = Intent(ACTION_START_VIDEO)
         intent.putExtra(CALL_ID, myVideoId)
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
+        removeOverlay()
     }
 
     private fun sendStartVoipCall(myVideoId: String) {
-        val intent2 = Intent(ACTION_CALLING)
-        LocalBroadcastManager.getInstance(this).sendBroadcast(intent2)
-
         val intent = Intent(ACTION_START_VOIP)
         intent.putExtra(CALL_ID, myVideoId)
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent)

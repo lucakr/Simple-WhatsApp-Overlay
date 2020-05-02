@@ -12,6 +12,7 @@ import android.graphics.Path
 import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
@@ -21,15 +22,17 @@ import com.lucakr.simplevideowhatsapp.OverlayService.Companion.OVERLAY_FULLSCREE
 import com.lucakr.simplevideowhatsapp.OverlayService.Companion.OVERLAY_NOTIFICATION_ANSWER_BTN_ACTION
 import com.lucakr.simplevideowhatsapp.OverlayService.Companion.OVERLAY_NOTIFICATION_DECLINE_BTN_ACTION
 
+
 class AutomationService : AccessibilityService() {
     private var whatsappOpen: Boolean = false
     private var whatsappNotificationAppeared: Boolean = false
     private var notification: Notification?= null
-    private lateinit var overlaySvc: Intent
+    private var lastValidNotification: Notification?=null
     private lateinit var endCallBtn: List<AccessibilityNodeInfoCompat>
     private lateinit var callBackBtn: List<AccessibilityNodeInfoCompat>
     private lateinit var acceptCallBtn: List<AccessibilityNodeInfoCompat>
     private lateinit var declineCallBtn: List<AccessibilityNodeInfoCompat>
+    private lateinit var callStatus: List<AccessibilityNodeInfoCompat>
     private val mainContext = this
 
     @RequiresApi(Build.VERSION_CODES.N)
@@ -190,15 +193,19 @@ class AutomationService : AccessibilityService() {
                 }
 
                 OVERLAY_NOTIFICATION_ANSWER_BTN_ACTION -> {
-                    // TODO check this works and is the right index
-                    notification!!.actions[1].actionIntent.send()
+                    println("Attempting to answer")
+                    //println(notification!!.toString())
+                    lastValidNotification!!.actions[1].actionIntent.send()
                 }
 
                 OVERLAY_NOTIFICATION_DECLINE_BTN_ACTION -> {
-                    // TODO check this works and is the right index
-                    notification!!.actions[0].actionIntent.send()
+                    println("Attempting to decline")
+                    lastValidNotification!!.actions[0].actionIntent.send()
                 }
 
+                CHECK -> {
+
+                }
             }
         }
     }
@@ -207,7 +214,6 @@ class AutomationService : AccessibilityService() {
         println("AUTOMATION SERVICE STARTED")
         whatsappOpen = false
         whatsappNotificationAppeared = false
-        overlaySvc = Intent(this, OverlayService::class.java)
 
         // Setup Broadcast Receiver
         val filter = IntentFilter(OVERLAY_END_BTN_ACTION).apply {
@@ -215,6 +221,7 @@ class AutomationService : AccessibilityService() {
             addAction(OVERLAY_NOTIFICATION_DECLINE_BTN_ACTION)
             addAction(OVERLAY_FULLSCREEN_ANSWER_BTN_ACTION)
             addAction(OVERLAY_FULLSCREEN_DECLINE_BTN_ACTION)
+            addAction(CHECK)
         }
         LocalBroadcastManager.getInstance(this).registerReceiver(bReceiver, filter)
     }
@@ -230,10 +237,10 @@ class AutomationService : AccessibilityService() {
     @RequiresApi(Build.VERSION_CODES.P)
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event!!.packageName == "com.whatsapp" && event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
-             // Try to get the end_call_btn
+            println(event!!.toString())
             val nodeInfoList = AccessibilityNodeInfoCompat.wrap(rootInActiveWindow)
 
-            val callStatus = nodeInfoList.findAccessibilityNodeInfosByViewId("com.whatsapp:id/call_status")
+            callStatus = nodeInfoList.findAccessibilityNodeInfosByViewId("com.whatsapp:id/call_status")
             endCallBtn = nodeInfoList.findAccessibilityNodeInfosByViewId("com.whatsapp:id/end_call_btn")
             acceptCallBtn = nodeInfoList.findAccessibilityNodeInfosByViewId("com.whatsapp:id/accept_incoming_call_view")
             declineCallBtn = nodeInfoList.findAccessibilityNodeInfosByViewId("com.whatsapp:id/decline_incoming_call_view")
@@ -261,12 +268,16 @@ class AutomationService : AccessibilityService() {
         } else if(event.packageName == "com.whatsapp" && event.eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
             println("WHATSAPP NOTIFICATION")
             notification = event.parcelableData as Notification
-            println(event.toString())
+            println(notification!!.actions.toString())
 
             // Check the channel is correct
             if (notification!!.channelId != "voip_notification_11") {
                 notification = null
                 return
+            }
+
+            if(notification != null) {
+                lastValidNotification = notification
             }
 
             // Notification has appeared
@@ -295,5 +306,6 @@ class AutomationService : AccessibilityService() {
         const val ACTION_CALLING = "calling"
         const val ACTION_CALL_ACCEPTED = "call_accepted"
         const val ACTION_CALL_DECLINED = "call_declined"
+        const val CHECK = "stuff"
     }
 }
