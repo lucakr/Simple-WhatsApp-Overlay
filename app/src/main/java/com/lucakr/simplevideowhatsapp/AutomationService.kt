@@ -24,204 +24,75 @@ import com.lucakr.simplevideowhatsapp.OverlayService.Companion.OVERLAY_NOTIFICAT
 
 
 class AutomationService : AccessibilityService() {
-    private var whatsappOpen: Boolean = false
-    private var whatsappNotificationAppeared: Boolean = false
     private var notification: Notification?= null
-    private var lastValidNotification: Notification?=null
     private lateinit var endCallBtn: List<AccessibilityNodeInfoCompat>
-    private lateinit var callBackBtn: List<AccessibilityNodeInfoCompat>
-    private lateinit var acceptCallBtn: List<AccessibilityNodeInfoCompat>
-    private lateinit var declineCallBtn: List<AccessibilityNodeInfoCompat>
     private lateinit var callStatus: List<AccessibilityNodeInfoCompat>
-    private val mainContext = this
-
-    @RequiresApi(Build.VERSION_CODES.N)
-    private fun clickPoint(x: Float, y: Float) {
-        val dragUpPath = Path().apply {
-            moveTo(x, y)
-            lineTo(x, y+1)
-        }
-        val duration = 1L // 100L = 0.1 second
-
-        val gestureBuilder = GestureDescription.Builder()
-        gestureBuilder.addStroke(GestureDescription.StrokeDescription(dragUpPath, 0L, duration))
-        dispatchGesture(gestureBuilder.build(), object: GestureResultCallback() {
-            override fun onCompleted(gestureDescription: GestureDescription?) {
-                super.onCompleted(gestureDescription)
-                println("Click completed")
-            }
-        }, null)
-    }
-
-    @RequiresApi(Build.VERSION_CODES.N)
-    private fun swipeUpFromPoint(x: Float, y: Float, callback: GestureResultCallback) {
-        val dragUpPath = Path().apply {
-            moveTo(x, y)
-            lineTo(x, y-500)
-        }
-        val duration = 10L // 100L = 0.1 second
-
-        val gestureBuilder = GestureDescription.Builder()
-        gestureBuilder.addStroke(GestureDescription.StrokeDescription(dragUpPath, 0L, duration))
-        dispatchGesture(gestureBuilder.build(), callback, null)
-    }
 
     private val bReceiver: BroadcastReceiver = object : BroadcastReceiver() {
         @RequiresApi(Build.VERSION_CODES.N)
         override fun onReceive(context: Context, intent: Intent) {
             // Check the intent is for us
             when(intent.action) {
-                OVERLAY_END_BTN_ACTION -> {
-                    // TODO check this works
-
+                END_CALL -> {
                     // Check endCallBtn to be sure
                     if (endCallBtn.isNotEmpty()) {
-                        println("Ending call")
+                        println("Performing end call action")
 
                         // Disable touch by enabling TouchExplorationMode
-                        val info = this@AutomationService.serviceInfo
-                        info.flags =
-                            info.flags or AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE
-                        this@AutomationService.serviceInfo = info
+//                        val info = this@AutomationService.serviceInfo
+//                        info.flags =
+//                            info.flags or AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE
+//                        this@AutomationService.serviceInfo = info
 
                         // Need this delay for some reason
                         Thread.sleep(1000)
 
+                        println(endCallBtn.toString())
+
                         // Click to end call
                         endCallBtn[0].performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    } else {
+                        sendErrorNoEndCallBtn()
                     }
                 }
 
-                OVERLAY_FULLSCREEN_ANSWER_BTN_ACTION -> {
-                    // TODO fix this for older Android versions
-
-//                    // Check acceptCallBtn to be sure
-//                    if (acceptCallBtn.isNotEmpty()) {
-//                        println("Answering call")
-//
-//                        // Disable touch by enabling TouchExplorationMode
-//                        val info = this@AutomationService.serviceInfo
-//                        info.flags =
-//                            info.flags or AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE
-//                        this@AutomationService.serviceInfo = info
-//
-//                        // Random needed delay
-//                        Thread.sleep(500)
-//
-//                        // Enable touch by disabling TouchExplorationMode
-//                        info.flags =
-//                            info.flags and AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE.inv()
-//                        this@AutomationService.serviceInfo = info
-//
-//                        // Accept call
-//                        val bound = Rect()
-//                        acceptCallBtn[0].getBoundsInScreen(bound)
-//                        swipeUpFromPoint(
-//                            bound.centerX().toFloat(),
-//                            bound.centerY().toFloat(),
-//                            object : GestureResultCallback() {
-//                                override fun onCompleted(gestureDescription: GestureDescription?) {
-//                                    super.onCompleted(gestureDescription)
-//
-//                                    info.flags =
-//                                        info.flags or AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE
-//                                    this@AutomationService.serviceInfo = info
-//
-//                                    // Delay for the active call window to start
-//                                    Thread.sleep(500)
-//
-//                                    // Search the active window for the end button
-//                                    val nodeInfoList =
-//                                        AccessibilityNodeInfoCompat.wrap(rootInActiveWindow)
-//                                    endCallBtn =
-//                                        nodeInfoList.findAccessibilityNodeInfosByViewId("com.whatsapp:id/end_call_btn")
-//                                    println(endCallBtn.toString())
-//
-//                                    // Make the end call overlay appear
-//                                    val subIntent = Intent(OVERLAY_POST_ACCEPT_CALL)
-//                                    LocalBroadcastManager.getInstance(mainContext)
-//                                        .sendBroadcast(subIntent)
-//
-//                                    info.flags =
-//                                        info.flags and AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE.inv()
-//                                    this@AutomationService.serviceInfo = info
-//                                }
-//                            })
-//
-//                    }
+                ANSWER_CALL -> {
+                    if(notification != null) {
+                        println("Answering call")
+                        //println(notification!!.toString())
+                        notification!!.actions[1].actionIntent.send()
+                    } else {
+                        sendErrorNoNotification()
+                    }
                 }
 
-                OVERLAY_FULLSCREEN_DECLINE_BTN_ACTION -> {
-                    // TODO fix this for older Android versions
-
-//                    // Check declineCallBtn to be sure
-//                    if (declineCallBtn.isNotEmpty()) {
-//                        println("Declining call")
-//
-//                        // Disable touch by enabling TouchExplorationMode
-//                        val info = this@AutomationService.serviceInfo
-//                        info.flags =
-//                            info.flags or AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE
-//                        this@AutomationService.serviceInfo = info
-//
-//                        // Random needed delay
-//                        Thread.sleep(500)
-//
-//                        // Enable touch by disabling TouchExplorationMode
-//                        info.flags =
-//                            info.flags and AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE.inv()
-//                        this@AutomationService.serviceInfo = info
-//
-//                        // Decline call
-//                        val bound = Rect()
-//                        declineCallBtn[0].getBoundsInScreen(bound)
-//                        swipeUpFromPoint(
-//                            bound.centerX().toFloat(),
-//                            bound.centerY().toFloat(),
-//                            object : GestureResultCallback() {
-//                                override fun onCompleted(gestureDescription: GestureDescription?) {
-//                                    super.onCompleted(gestureDescription)
-//                                    println("Swipe completed")
-//                                    // Disable touch by enabling TouchExplorationMode
-//                                    val info = this@AutomationService.serviceInfo
-//                                    info.flags =
-//                                        info.flags or AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE
-//                                    this@AutomationService.serviceInfo = info
-//                                }
-//                            })
-//                    }
-                }
-
-                OVERLAY_NOTIFICATION_ANSWER_BTN_ACTION -> {
-                    println("Attempting to answer")
-                    //println(notification!!.toString())
-                    lastValidNotification!!.actions[1].actionIntent.send()
-                }
-
-                OVERLAY_NOTIFICATION_DECLINE_BTN_ACTION -> {
-                    println("Attempting to decline")
-                    lastValidNotification!!.actions[0].actionIntent.send()
-                }
-
-                CHECK -> {
-
+                DECLINE_CALL -> {
+                    if(notification != null) {
+                        println("Declining call")
+                        notification!!.actions[0].actionIntent.send()
+                    } else {
+                        sendErrorNoNotification()
+                    }
                 }
             }
         }
     }
 
+    private fun sendErrorNoEndCallBtn() {
+        LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(ERROR_NO_END_CALL_BTN))
+    }
+
+    private fun sendErrorNoNotification() {
+        LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(ERROR_NO_NOTIFICATION))
+    }
+
     override fun onCreate() {
         println("AUTOMATION SERVICE STARTED")
-        whatsappOpen = false
-        whatsappNotificationAppeared = false
 
         // Setup Broadcast Receiver
-        val filter = IntentFilter(OVERLAY_END_BTN_ACTION).apply {
-            addAction(OVERLAY_NOTIFICATION_ANSWER_BTN_ACTION)
-            addAction(OVERLAY_NOTIFICATION_DECLINE_BTN_ACTION)
-            addAction(OVERLAY_FULLSCREEN_ANSWER_BTN_ACTION)
-            addAction(OVERLAY_FULLSCREEN_DECLINE_BTN_ACTION)
-            addAction(CHECK)
+        val filter = IntentFilter(END_CALL).apply {
+            addAction(ANSWER_CALL)
+            addAction(DECLINE_CALL)
         }
         LocalBroadcastManager.getInstance(this).registerReceiver(bReceiver, filter)
     }
@@ -236,59 +107,57 @@ class AutomationService : AccessibilityService() {
 
     @RequiresApi(Build.VERSION_CODES.P)
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event!!.packageName == "com.whatsapp" && event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
-            println(event!!.toString())
+        if (event!!.packageName == "com.whatsapp" && (event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED || event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED)) {
+
             val nodeInfoList = AccessibilityNodeInfoCompat.wrap(rootInActiveWindow)
 
+            val tmpEndBtn = nodeInfoList.findAccessibilityNodeInfosByViewId("com.whatsapp:id/end_call_btn")
             callStatus = nodeInfoList.findAccessibilityNodeInfosByViewId("com.whatsapp:id/call_status")
-            endCallBtn = nodeInfoList.findAccessibilityNodeInfosByViewId("com.whatsapp:id/end_call_btn")
-            acceptCallBtn = nodeInfoList.findAccessibilityNodeInfosByViewId("com.whatsapp:id/accept_incoming_call_view")
-            declineCallBtn = nodeInfoList.findAccessibilityNodeInfosByViewId("com.whatsapp:id/decline_incoming_call_view")
-            callBackBtn = nodeInfoList.findAccessibilityNodeInfosByViewId("com.whatsapp:id/call_back_btn")
 
-            if (endCallBtn.isNotEmpty() && acceptCallBtn.isEmpty() && declineCallBtn.isEmpty() && callBackBtn.isEmpty() && callStatus.isNotEmpty() && (callStatus[0].text == "RINGING" || callStatus[0].text == "CALLING")) {
-                LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(ACTION_CALLING))
-            } else if (endCallBtn.isNotEmpty() && acceptCallBtn.isEmpty() && declineCallBtn.isEmpty() && callBackBtn.isEmpty() && callStatus.isEmpty()) {
-                LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(ACTION_CALL_ACCEPTED))
-            } else if (endCallBtn.isNotEmpty() && acceptCallBtn.isEmpty() && declineCallBtn.isEmpty() && callBackBtn.isEmpty() && callStatus.isNotEmpty() && callStatus[0].text == "Call declined") {
-                LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(ACTION_CALL_DECLINED))
-            } else if (endCallBtn.isEmpty() && acceptCallBtn.isEmpty() && declineCallBtn.isEmpty() && callBackBtn.isNotEmpty() && callStatus.isNotEmpty() && callStatus[0].text == "Not answered") {
-                LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(ACTION_UNANSWERED_APPEAR))
-            } else if (endCallBtn.isEmpty() && acceptCallBtn.isNotEmpty() && declineCallBtn.isNotEmpty() && callBackBtn.isEmpty() && callStatus.isEmpty()) {
-                LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(ACTION_INCOMING_FULLSCREEN_APPEAR))
-            } else if (endCallBtn.isEmpty() && acceptCallBtn.isEmpty() && declineCallBtn.isEmpty() && callBackBtn.isEmpty() && callStatus.isEmpty()) {
-                LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(ACTION_UNDOCUMENTED_VIEW))
-            } else {
-                // Ideally in our controlled state, this should never occur
-                // Need to figure out a way to handle it if it does occur (global back button might be a way)
-                println("ERR: Available nodes don't make sense at all")
-                return
+            if (tmpEndBtn.isNotEmpty()) {
+                endCallBtn = tmpEndBtn
+            }
+
+            if(callStatus.isNotEmpty()) {
+                when(callStatus[0].text) {
+                    "RINGING" -> {
+                        LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(WHATSAPP_CALLING))
+                    }
+                    "CALLING" -> {
+                        LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(WHATSAPP_CALLING))
+                    }
+                    "Call declined" -> {
+                        LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(WHATSAPP_CALL_DECLINED))
+                    }
+                    "Not answered" -> {
+                        LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(WHATSAPP_NOT_ANSWERED))
+                    }
+                    "" -> {
+                        LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(WHATSAPP_IN_CALL))
+                    }
+                    "WhatsApp video call" -> {
+                        LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(WHATSAPP_INCOMING))
+                    }
+                }
             }
 
         } else if(event.packageName == "com.whatsapp" && event.eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
-            println("WHATSAPP NOTIFICATION")
-            notification = event.parcelableData as Notification
-            println(notification!!.actions.toString())
+            val tmpNot = event.parcelableData as Notification
 
             // Check the channel is correct
-            if (notification!!.channelId != "voip_notification_11") {
-                notification = null
-                return
+            if (tmpNot!!.channelId == "voip_notification_11") {
+                notification = tmpNot
             }
-
-            if(notification != null) {
-                lastValidNotification = notification
-            }
-
-            // Notification has appeared
-            LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(ACTION_INCOMING_NOTIFICATION_APPEAR))
         } else if(event.packageName == "com.android.systemui" && event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            println(event.toString())
+            // Always close the shade
+            LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS))
             // Check a notification is active
-            if(notification != null) {
-                // Notification has disappeared
-                notification = null
-                LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(ACTION_INCOMING_NOTIFICATION_DISAPPEAR))
-            }
+//            if(notification != null) {
+//                // Notification has disappeared
+//                notification = null
+//                LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(WHATSAPP_NOTIFICATION_APPEAR))
+//            }
         } else {
             //println(event!!.toString())
             return
@@ -298,14 +167,19 @@ class AutomationService : AccessibilityService() {
 
     companion object {
         private val AUTOMATION_TAG = AutomationService::class.java.simpleName
-        const val ACTION_INCOMING_NOTIFICATION_APPEAR = "incoming_notification_appear"
-        const val ACTION_INCOMING_NOTIFICATION_DISAPPEAR = "incoming_notification_disappear"
-        const val ACTION_INCOMING_FULLSCREEN_APPEAR = "incoming_fullscreen_appear"
-        const val ACTION_UNDOCUMENTED_VIEW = "undocumented_view"
-        const val ACTION_UNANSWERED_APPEAR = "unanswered_appear"
-        const val ACTION_CALLING = "calling"
-        const val ACTION_CALL_ACCEPTED = "call_accepted"
-        const val ACTION_CALL_DECLINED = "call_declined"
-        const val CHECK = "stuff"
+        const val END_CALL = "whatsapp_end_call"
+        const val ANSWER_CALL = "whatsapp_answer_call_via_notification"
+        const val DECLINE_CALL = "whatsapp_decline_call_via_notification"
+        const val WINDOW_CHANGE_W_END_CALL = "whatsapp_window_change_with_end_call"
+        const val WINDOW_CHANGE_NO_END_CALL = "whatsapp_window_change_without_end_call"
+        const val WINDOW_CHANGE = "whatsapp_window_change"
+        const val NOTIFICATION_CHANGE = "whatsapp_notification_change"
+        const val ERROR_NO_END_CALL_BTN = "whatsapp_no_end_call_btn"
+        const val ERROR_NO_NOTIFICATION = "whatsapp_no_notification"
+        const val WHATSAPP_CALLING = "whatsapp_calling"
+        const val WHATSAPP_IN_CALL = "whatsapp_in_call"
+        const val WHATSAPP_CALL_DECLINED = "whatsapp_call_declined"
+        const val WHATSAPP_INCOMING = "whatsapp_incoming"
+        const val WHATSAPP_NOT_ANSWERED = "whatsapp_not_answered"
     }
 }

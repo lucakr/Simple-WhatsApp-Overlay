@@ -312,10 +312,6 @@ class FullscreenActivity : AppCompatActivity() {
             startActivity(intent)
             return
         }
-
-        // Start whatsapp
-        //val launchIntent = packageManager.getLaunchIntentForPackage("com.whatsapp");
-        //startActivity(launchIntent)
     }
 
     /** COMPANIONS **/

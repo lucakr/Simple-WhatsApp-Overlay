@@ -8,15 +8,13 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.PixelFormat
+import android.media.AudioManager
 import android.os.Build
 import android.os.CountDownTimer
 import android.os.IBinder
 import android.provider.ContactsContract
 import android.util.Log
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
-import android.view.WindowManager
+import android.view.*
 import android.view.WindowManager.LayoutParams
 import android.widget.Button
 import android.widget.ImageView
@@ -26,15 +24,15 @@ import androidx.annotation.RequiresApi
 import androidx.core.net.toUri
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.recyclerview.widget.RecyclerView
-import com.lucakr.simplevideowhatsapp.AutomationService.Companion.ACTION_CALLING
-import com.lucakr.simplevideowhatsapp.AutomationService.Companion.ACTION_CALL_ACCEPTED
-import com.lucakr.simplevideowhatsapp.AutomationService.Companion.ACTION_CALL_DECLINED
-import com.lucakr.simplevideowhatsapp.AutomationService.Companion.ACTION_INCOMING_FULLSCREEN_APPEAR
-import com.lucakr.simplevideowhatsapp.AutomationService.Companion.ACTION_INCOMING_NOTIFICATION_APPEAR
-import com.lucakr.simplevideowhatsapp.AutomationService.Companion.ACTION_INCOMING_NOTIFICATION_DISAPPEAR
-import com.lucakr.simplevideowhatsapp.AutomationService.Companion.ACTION_UNANSWERED_APPEAR
-import com.lucakr.simplevideowhatsapp.AutomationService.Companion.ACTION_UNDOCUMENTED_VIEW
-import com.lucakr.simplevideowhatsapp.AutomationService.Companion.CHECK
+import com.lucakr.simplevideowhatsapp.AutomationService.Companion.ANSWER_CALL
+import com.lucakr.simplevideowhatsapp.AutomationService.Companion.DECLINE_CALL
+import com.lucakr.simplevideowhatsapp.AutomationService.Companion.END_CALL
+import com.lucakr.simplevideowhatsapp.AutomationService.Companion.ERROR_NO_END_CALL_BTN
+import com.lucakr.simplevideowhatsapp.AutomationService.Companion.ERROR_NO_NOTIFICATION
+import com.lucakr.simplevideowhatsapp.AutomationService.Companion.NOTIFICATION_CHANGE
+import com.lucakr.simplevideowhatsapp.AutomationService.Companion.WINDOW_CHANGE
+import com.lucakr.simplevideowhatsapp.AutomationService.Companion.WINDOW_CHANGE_NO_END_CALL
+import com.lucakr.simplevideowhatsapp.AutomationService.Companion.WINDOW_CHANGE_W_END_CALL
 import com.lucakr.simplevideowhatsapp.FullscreenActivity.Companion.ACTION_MAIN_ACTIVITY_RESUMED
 
 
@@ -43,9 +41,10 @@ class OverlayService : Service() {
     private var activeOverlay: View? = null
     private lateinit var contactView:RecyclerView
     private var contactPos = 0
+    private var audioManager: AudioManager ?= null
 
     enum class WhatsAppState {
-        CLOSED, CALLING, IN_CALL, INCOMING_VIA_NOTIFICATION, INCOMING_VIA_FULLSCREEN, UNANSWERED
+        CLOSED, CALLING, IN_CALL, INCOMING
     }
 
     private var state = WhatsAppState.CLOSED
@@ -59,11 +58,11 @@ class OverlayService : Service() {
         val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         am.killBackgroundProcesses("com.whatsapp")
 
-//        // Start whatsapp again
-//        startActivity(packageManager.getLaunchIntentForPackage("com.whatsapp"))
-
         // Set default overlay
-        //setOverlay(R.layout.activity_fullscreen)
+        setOverlay(R.layout.activity_fullscreen)
+
+        // Cancel the timer just in case
+        audioModeChecker.cancel()
 
         // Go home
         // TODO
@@ -77,140 +76,128 @@ class OverlayService : Service() {
 
                 /** INTENTS FROM ACCESSIBILITY SERVICE **/
 
-                ACTION_INCOMING_NOTIFICATION_APPEAR-> {
-                    // Don't want to notify of a call if we're already in some form of call
-                    if(state == WhatsAppState.CLOSED) {
-                        println("Incoming notification appear")
-                        state = WhatsAppState.INCOMING_VIA_NOTIFICATION
+                WINDOW_CHANGE_W_END_CALL -> {
+                    // Audio mode tends not to change for a bit after the window change
+                    Thread.sleep(AUDIO_MODE_CHANGE_DELAY.toLong())
+                    val audioMode = audioManager!!.mode
+
+                    println(audioMode.toString())
+
+                    if(state == WhatsAppState.CLOSED && audioMode == AudioManager.MODE_IN_COMMUNICATION) {
+                        state = WhatsAppState.IN_CALL
+                        println("STATE: IN_CALL FROM CLOSED")
+                        setOverlay(R.layout.end_overlay)
+                    } else if(state == WhatsAppState.INCOMING && audioMode == AudioManager.MODE_IN_COMMUNICATION) {
+                        state = WhatsAppState.IN_CALL
+                        println("STATE: IN_CALL FROM INCOMING")
+                        setOverlay(R.layout.end_overlay)
+                        audioModeChecker.cancel()
+                    } else {
+                        println("ERR: Invalid state: $state for window change with end call btn")
+                        //reset()
+                    }
+                }
+
+                WINDOW_CHANGE_NO_END_CALL -> {
+                    // Audio mode tends not to change for a bit after the window change
+                    Thread.sleep(AUDIO_MODE_CHANGE_DELAY.toLong() * 2)
+                    val audioMode = audioManager!!.mode
+
+                    // Yes I know part of this is redundant. I've separate out the state changes to make it easier to understand.
+                    if(state == WhatsAppState.CALLING && audioMode == AudioManager.MODE_NORMAL) {
+                        println("STATE: CLOSED FROM CALLING")
+                        audioModeChecker.cancel()
+                        reset()
+                    } else if(state == WhatsAppState.IN_CALL && audioMode == AudioManager.MODE_NORMAL) {
+                        println("STATE: CLOSED FROM IN_CALL")
+                        reset()
+                    } else {
+                        println("ERR: Invalid state: $state for window change with no end call btn")
+                        //reset()
+                    }
+                }
+
+                WINDOW_CHANGE -> {
+                    // Audio mode tends not to change for a bit after the window change
+                    Thread.sleep(AUDIO_MODE_CHANGE_DELAY.toLong())
+                    val audioMode = audioManager!!.mode
+
+                    println(audioMode.toString())
+
+                    if(state == WhatsAppState.CLOSED && audioMode == AudioManager.MODE_IN_COMMUNICATION) {
+                        println("STATE: CALLING FROM CLOSED")
+                        state = WhatsAppState.CALLING
+                        setOverlay(R.layout.calling_overlay)
+                        audioModeChecker.start()
+                    } else if(state == WhatsAppState.INCOMING && audioMode == AudioManager.MODE_IN_COMMUNICATION) {
+                        println("STATE: IN_CALL FROM INCOMING")
+                        state = WhatsAppState.IN_CALL
+                        setOverlay(R.layout.end_overlay)
+                        audioModeChecker.cancel()
+                    } else if(state == WhatsAppState.CALLING && audioMode == AudioManager.MODE_NORMAL) {
+                        println("STATE: CLOSED FROM CALLING")
+                        audioModeChecker.cancel()
+                        reset()
+                    } else if(state == WhatsAppState.IN_CALL && audioMode == AudioManager.MODE_NORMAL) {
+                        println("STATE: CLOSED FROM IN_CALL")
+                        reset()
+                    } else {
+                        println("ERR: Invalid state: $state for window change")
+                        //reset()
+                    }
+                }
+
+                NOTIFICATION_CHANGE -> {
+                    // Audio mode tends not to change for a bit after the window change
+                    Thread.sleep(AUDIO_MODE_CHANGE_DELAY.toLong())
+                    val audioMode = audioManager!!.mode
+
+                    println(audioMode.toString())
+
+                    if(state == WhatsAppState.CLOSED && audioMode == AudioManager.MODE_RINGTONE) {
+                        println("STATE: INCOMING FROM CLOSED")
+                        state = WhatsAppState.INCOMING
                         setOverlay(R.layout.start_overlay)
-                        sendCloseSystemDialogs()
+                        audioModeChecker.start()
+                    } else {
+                        println("ERR: Invalid state: $state for notification change")
+                        //reset()
                     }
                 }
 
-                ACTION_INCOMING_NOTIFICATION_DISAPPEAR-> {
-                    // Only care about the notification dismissal if we're depending on the notification
-                    if(state == WhatsAppState.INCOMING_VIA_NOTIFICATION) {
-                        println("Incoming notification disappear")
-                        //state = WhatsAppState.CLOSED
-                        //removeOverlay()
-                    }
-                }
-
-                ACTION_INCOMING_FULLSCREEN_APPEAR-> {
-                    // Don't want to notify of a call if we're already in some form of call
-                    if(state == WhatsAppState.CLOSED) {
-                        println("Incoming fullscreen appear")
-                        state = WhatsAppState.INCOMING_VIA_FULLSCREEN
-                        setOverlay(R.layout.start_overlay)
-                    }
-                }
-
-                ACTION_UNDOCUMENTED_VIEW-> {
-                    // Something else has come up, so purge and reset
-                    println("Undocumented view")
+                ERROR_NO_END_CALL_BTN -> {
+                    println("ERR: No end call btn")
                     //reset()
                 }
 
-                ACTION_UNANSWERED_APPEAR-> {
-                    // Should only happen from IN_CALL state, but we'll handle it for any state to be safe
-                    println("Unanswered appear")
-                    state = WhatsAppState.UNANSWERED
-                    setOverlay(R.layout.unanswered_overlay)
-                }
-
-                ACTION_CALLING-> {
-                    if(state == WhatsAppState.CALLING) {
-                        return
-                    }
-
-                    // Should only come from closed state, something is wrong if it doesn't
-                    if(state == WhatsAppState.CLOSED) {
-                        println("Starting calling overlay")
-                        //removeOverlay()
-                        setOverlay(R.layout.calling_overlay)
-                        state = WhatsAppState.CALLING
-                    } else {
-                        println("Invalid current state for calling")
-                        reset()
-                    }
-                }
-
-                ACTION_CALL_ACCEPTED-> {
-                    if(state == WhatsAppState.IN_CALL) {
-                        return
-                    }
-
-                    if(state == WhatsAppState.INCOMING_VIA_NOTIFICATION) {
-                        println("We accepted call")
-                        setOverlay(R.layout.end_overlay)
-                        state = WhatsAppState.IN_CALL
-                    }
-
-                    if(state == WhatsAppState.CALLING) {
-                        println("Call accepted")
-                        setOverlay(R.layout.end_overlay)
-                        state = WhatsAppState.IN_CALL
-                    } else {
-                        println("Invalid current state for call accepted")
-                        reset()
-                    }
-                }
-
-                ACTION_CALL_DECLINED-> {
-                    if(state == WhatsAppState.CLOSED) {
-                        return
-                    }
-
-                    if(state == WhatsAppState.CALLING) {
-                        println("Call declined")
-
-                        setOverlay(R.layout.activity_fullscreen)
-                        state = WhatsAppState.CLOSED
-                    } else {
-                        println("Invalid current state for call declined")
-                        reset()
-                    }
+                ERROR_NO_NOTIFICATION -> {
+                    println("ERR: No notification")
+                    //reset()
                 }
 
                 /** INTENTS FROM THIS SERVICE **/
 
                 ACTION_ACCEPT_CALL-> {
-                    // Only possible in the two incoming call states, ignore if not
-                    // Follow up action depends on current state
-                    if(state == WhatsAppState.INCOMING_VIA_NOTIFICATION) {
+                    if(state == WhatsAppState.INCOMING) {
                         // Trigger notification accept button action
                         println("Accepting notification call")
                         sendAcceptCallViaNotification()
-
-                        //state = WhatsAppState.IN_CALL
-                        //setOverlay(R.layout.end_overlay)
-                    } else if(state == WhatsAppState.INCOMING_VIA_FULLSCREEN) {
-                        // Do swipe up to accept action
-                        println("Accepting fullscreen call")
-                        sendAcceptCallViaFullscreen()
-
-                        state = WhatsAppState.IN_CALL
-                        setOverlay(R.layout.end_overlay)
+                    } else {
+                        println("ERR: Tried to accept incoming from invalid state: $state")
+                        //reset()
                     }
                 }
 
                 ACTION_DECLINE_CALL-> {
                     // Only possible in the two incoming call states, ignore if not
                     // Follow up action depends on current state
-                    if(state == WhatsAppState.INCOMING_VIA_NOTIFICATION) {
+                    if(state == WhatsAppState.INCOMING) {
                         // Trigger notification decline button action
                         println("Declining notification call")
                         sendDeclineCallViaNotification()
-
-                        //state = WhatsAppState.CLOSED
-                        //setOverlay(R.layout.activity_fullscreen)
-                    } else if(state == WhatsAppState.INCOMING_VIA_FULLSCREEN) {
-                        // Do swipe up to decline action
-                        println("Declining fullscreen call")
-                        sendDeclineCallViaFullscreen()
-
-                        state = WhatsAppState.CLOSED
-                        setOverlay(R.layout.activity_fullscreen)
+                    } else {
+                        println("ERR: Tried to decline incoming from invalid state: $state")
+                        //reset()
                     }
                 }
 
@@ -220,62 +207,65 @@ class OverlayService : Service() {
                         // Trigger end call button
                         println("Ending call")
                         sendEndCall()
-
-                        //state = WhatsAppState.CLOSED
-                        //setOverlay(R.layout.activity_fullscreen)
+                    } else {
+                        println("ERR: Tried to end call from invalid state: $state")
+                        //reset()
                     }
-                }
-
-                ACTION_ACKNOWLEDGE_UNANSWERED-> {
-                    // We don't have a way to trigger the "cancel" button, so just reset
-                    println("Unanswered acknowledged")
-                    reset()
                 }
 
                 /** INTENTS FROM MAIN ACTIVITY **/
 
                 ACTION_MAIN_ACTIVITY_RESUMED-> {
-                    if(state == WhatsAppState.IN_CALL) {
-                        // Call most likely ended by the other party
-                        println("Resumed main activity after being in call")
-
-                        state = WhatsAppState.CLOSED
-                        setOverlay(R.layout.activity_fullscreen)
-                    }
-
-                    if(state == WhatsAppState.CALLING) {
-                        // Call most likely declined by other party
-                        println("Resumed main activity while calling")
-
-                        state = WhatsAppState.CLOSED
-                        setOverlay(R.layout.activity_fullscreen)
-                    }
-
-                    if(state == WhatsAppState.INCOMING_VIA_NOTIFICATION) {
-                        // Call most likely declined by other party
-                        println("Resumed main activity while call incoming")
-
-                        state = WhatsAppState.CLOSED
-                        setOverlay(R.layout.activity_fullscreen)
-                    }
-
                     if(state != WhatsAppState.CLOSED) {
                         println("Resumed main activity from unknown state")
-                        //reset()
+                        reset()
                     }
                 }
             }
+
         }
     }
 
-    private val checkTimer = object: CountDownTimer(2000, 2000) {
+    /** Whatsapp call times out after about 50 seconds, so we set the limit for 60s. If we reach 60s
+     *  without cancelling the timer, then something is wrong and we should reset.
+     */
+    private val audioModeChecker = object: CountDownTimer(60000, 200) {
+        @RequiresApi(Build.VERSION_CODES.P)
         override fun onFinish() {
-            sendCheck()
-            this.start()
+            // Something has gone wrong
+            reset()
         }
 
+        @RequiresApi(Build.VERSION_CODES.P)
         override fun onTick(millisUntilFinished: Long) {
+            // Check the audio mode for changes
+            val audioMode = audioManager!!.mode
 
+            println("MODE: ${audioMode.toString()}")
+
+            //if(state == WhatsAppState.CALLING && audioMode == AudioManager.MODE_IN_COMMUNICATION) {
+            //    // This is a valid change condition
+            //    println("STATE: IN_CALL FROM CALLING")
+            //    this.cancel()
+            //    state = WhatsAppState.IN_CALL
+            //    setOverlay(R.layout.end_overlay)
+            //} else
+            if(state == WhatsAppState.INCOMING && audioMode == AudioManager.MODE_NORMAL) {
+                // This is a valid change condition
+                println("STATE: CLOSED FROM INCOMING")
+                this.cancel()
+                reset()
+            } else if(state == WhatsAppState.CALLING && audioMode == AudioManager.MODE_RINGTONE) {
+                // This is a valid wait condition
+                return
+            } else if(state == WhatsAppState.INCOMING && audioMode == AudioManager.MODE_RINGTONE) {
+                // This is a valid wait condition
+                return
+            } else {
+                // Other other conditions shouldn't happen
+                //this.cancel()
+                //reset()
+            }
         }
 
     }
@@ -294,8 +284,6 @@ class OverlayService : Service() {
         // Start default overlay
         setOverlay(R.layout.activity_fullscreen)
 
-        checkTimer.start()
-
         return Service.START_STICKY
     }
 
@@ -303,24 +291,22 @@ class OverlayService : Service() {
         super.onCreate()
 
         // Setup Broadcast Receiver
-        val filter = IntentFilter(ACTION_INCOMING_NOTIFICATION_APPEAR).apply {
-            addAction(ACTION_INCOMING_NOTIFICATION_DISAPPEAR)
-            addAction(ACTION_INCOMING_FULLSCREEN_APPEAR)
-            addAction(ACTION_UNDOCUMENTED_VIEW)
-            addAction(ACTION_UNANSWERED_APPEAR)
-            addAction(ACTION_CALLING)
+        val filter = IntentFilter(ACTION_END_CALL).apply {
             addAction(ACTION_ACCEPT_CALL)
             addAction(ACTION_DECLINE_CALL)
-            addAction(ACTION_END_CALL)
-            addAction(ACTION_ACKNOWLEDGE_UNANSWERED)
-            addAction(ACTION_CALL_ACCEPTED)
-            addAction(ACTION_CALL_DECLINED)
+            addAction(WINDOW_CHANGE_W_END_CALL)
+            addAction(WINDOW_CHANGE_NO_END_CALL)
+            addAction(WINDOW_CHANGE)
+            addAction(NOTIFICATION_CHANGE)
+            addAction(ERROR_NO_END_CALL_BTN)
+            addAction(ERROR_NO_NOTIFICATION)
             addAction(ACTION_MAIN_ACTIVITY_RESUMED)
         }
 
         LocalBroadcastManager.getInstance(this).registerReceiver(bReceiver, filter)
 
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
 
     private fun removeOverlay() {
@@ -341,7 +327,7 @@ class OverlayService : Service() {
             LayoutParams.MATCH_PARENT,
             LayoutParams.MATCH_PARENT,
             LayoutParams.TYPE_APPLICATION_OVERLAY,
-            0,
+            LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT)
 
         val inflater = getSystemService(Context.LAYOUT_INFLATER_SERVICE) as LayoutInflater
@@ -412,38 +398,18 @@ class OverlayService : Service() {
         }
     }
 
-    private fun sendCheck() {
-        val intent = Intent(CHECK)
-        LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
-    }
-
-    private fun sendCloseSystemDialogs() {
-        val closeIntent = Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)
-        LocalBroadcastManager.getInstance(this).sendBroadcast(closeIntent)
-    }
-
-    private fun sendAcceptCallViaFullscreen() {
-        val intent = Intent(OVERLAY_FULLSCREEN_ANSWER_BTN_ACTION)
-        LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
-    }
-
     private fun sendAcceptCallViaNotification() {
-        val intent = Intent(OVERLAY_NOTIFICATION_ANSWER_BTN_ACTION)
-        LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
-    }
-
-    private fun sendDeclineCallViaFullscreen() {
-        val intent = Intent(OVERLAY_FULLSCREEN_DECLINE_BTN_ACTION)
+        val intent = Intent(ANSWER_CALL)
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
     }
 
     private fun sendDeclineCallViaNotification() {
-        val intent = Intent(OVERLAY_NOTIFICATION_DECLINE_BTN_ACTION)
+        val intent = Intent(DECLINE_CALL)
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
     }
 
     private fun sendEndCall() {
-        val intent = Intent(OVERLAY_END_BTN_ACTION)
+        val intent = Intent(END_CALL)
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
     }
 
@@ -638,6 +604,8 @@ class OverlayService : Service() {
 
     companion object {
         private val OVERLAY_TAG = OverlayService::class.java.simpleName
+        private val AUDIO_MODE_CHANGE_DELAY = 500
+
         const val OVERLAY_END_BTN_ACTION = "overlay_end_btn"
         const val OVERLAY_NOTIFICATION_ANSWER_BTN_ACTION = "overlay_notification_answer_btn"
         const val OVERLAY_NOTIFICATION_DECLINE_BTN_ACTION = "overlay_notification_decline_btn"
