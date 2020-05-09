@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:background="#00000000">
+    android:background="#ffffff">
 
     <LinearLayout
         android:id="@+id/fullscreen_content_controls"
@@ -13,7 +13,7 @@
         android:layout_height="match_parent"
         android:layout_gravity="center_horizontal"
         android:orientation="vertical"
-        android:background="#00000000">
+        android:background="#ffffff">
 
         <TextView
             android:id="@+id/topmost_view"
@@ -33,18 +33,18 @@
             android:textSize="30sp"
             android:text="Unknown"/>
 
-<!--        <ImageView-->
-<!--            android:id="@+id/caller_image"-->
-<!--            android:layout_width="match_parent"-->
-<!--            android:layout_height="wrap_content"-->
-<!--            android:adjustViewBounds="true"-->
-<!--            android:layout_marginBottom="2dp"-->
-<!--            android:layout_marginStart="2dp"-->
-<!--            android:layout_marginTop="50dp"-->
-<!--            android:contentDescription="Thumbnail"-->
-<!--            android:scaleType="fitCenter"-->
-<!--            tools:src="@mipmap/ic_launcher"-->
-<!--            android:layout_marginLeft="2dp" />-->
+        <ImageView
+            android:id="@+id/caller_image"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:adjustViewBounds="true"
+            android:layout_marginBottom="2dp"
+            android:layout_marginStart="2dp"
+            android:layout_marginTop="50dp"
+            android:contentDescription="Thumbnail"
+            android:scaleType="fitCenter"
+            tools:src="@mipmap/ic_launcher"
+            android:layout_marginLeft="2dp" />
 
         <!-- This FrameLayout insets its children based on system windows using
              android:fitsSystemWindows. -->
@@ -59,7 +59,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_gravity="bottom|center_horizontal"
-                android:background="#00000000"
+                android:background="#ffffff"
                 android:orientation="horizontal"
                 tools:ignore="UselessParent">
 

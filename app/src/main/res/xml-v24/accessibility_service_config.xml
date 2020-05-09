@@ -2,7 +2,7 @@
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/accessibility_service_description"
     android:accessibilityEventTypes="typeWindowContentChanged|typeNotificationStateChanged|typeWindowStateChanged"
-    android:accessibilityFlags="flagReportViewIds|flagDefault|flagIncludeNotImportantViews"
+    android:accessibilityFlags="flagReportViewIds|flagDefault|flagIncludeNotImportantViews|flagRetrieveInteractiveWindows"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:notificationTimeout="100"
     android:settingsActivity="com.lucakr.simplevideowhatsapp.FullscreenActivity"

@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:background="#00ffffff">
+    android:background="#ffffff">
 
     <LinearLayout
         android:id="@+id/fullscreen_content_controls"
@@ -32,6 +32,19 @@
             android:gravity="center"
             android:textSize="30sp"
             android:text="Unknown"/>
+
+        <ImageView
+            android:id="@+id/caller_image"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:adjustViewBounds="true"
+            android:layout_marginBottom="2dp"
+            android:layout_marginStart="2dp"
+            android:layout_marginTop="50dp"
+            android:contentDescription="Thumbnail"
+            android:scaleType="fitCenter"
+            tools:src="@mipmap/ic_launcher"
+            android:layout_marginLeft="2dp" />
 
         <FrameLayout
             android:layout_width="match_parent"

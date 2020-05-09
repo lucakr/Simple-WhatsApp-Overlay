@@ -3,10 +3,6 @@ package com.lucakr.simplevideowhatsapp
 import android.Manifest.permission.CALL_PHONE
 import android.Manifest.permission.READ_CONTACTS
 import android.accessibilityservice.AccessibilityService
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -15,29 +11,19 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.ContactsContract
 import android.provider.Settings
 import android.provider.Settings.SettingNotFoundException
 import android.text.TextUtils.SimpleStringSplitter
-import android.view.LayoutInflater
 import android.view.View
-import android.view.ViewGroup
-import android.widget.ImageView
-import android.widget.LinearLayout
-import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
-import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import androidx.core.net.toUri
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import androidx.recyclerview.widget.RecyclerView
-import com.lucakr.simplevideowhatsapp.OverlayService.Companion.ACTION_START_VIDEO
-import com.lucakr.simplevideowhatsapp.OverlayService.Companion.ACTION_START_VOIP
-import com.lucakr.simplevideowhatsapp.OverlayService.Companion.CALL_ID
-import kotlinx.android.synthetic.main.activity_fullscreen.*
+import com.lucakr.simplevideowhatsapp.AutomationService.Companion.ACTION_START_VIDEO
+import com.lucakr.simplevideowhatsapp.AutomationService.Companion.ACTION_START_VOIP
+import com.lucakr.simplevideowhatsapp.AutomationService.Companion.CALL_ID
 import kotlinx.android.synthetic.main.default_activity.*
 
 
@@ -278,7 +264,7 @@ class FullscreenActivity : AppCompatActivity() {
 
         // Start the overlay service
         val overlaySvc = Intent(this, OverlayService::class.java)
-        startService(overlaySvc)
+        //startService(overlaySvc)
 
         // Request READ_CONTACTS
         requestContacts()
