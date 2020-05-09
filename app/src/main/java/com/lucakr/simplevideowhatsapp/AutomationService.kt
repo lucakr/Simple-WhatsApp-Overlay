@@ -271,9 +271,9 @@ class AutomationService : AccessibilityService() {
                 println("CLOSING from $state during unanswered transition")
                 closeWhatsApp()
             } else if(addParticipantBtn.isNotEmpty()) {
-                if(state == WhatsAppState.IN_CALL) return
+                if (state == WhatsAppState.IN_CALL) return
 
-                if(state == WhatsAppState.CALLING || state == WhatsAppState.INCOMING) {
+                if (state == WhatsAppState.CALLING || state == WhatsAppState.INCOMING) {
                     println("IN_CALL from CALLING or INCOMING")
                     state = WhatsAppState.IN_CALL
                     setOverlay(R.layout.end_overlay)
@@ -323,6 +323,7 @@ class AutomationService : AccessibilityService() {
                     }
                 }
             } else {
+                if(tmpEndBtn.isNotEmpty()) return // quick fix for early exit on call answer
                 println("CLOSING from $state during unknown transition")
                 closeWhatsApp()
             }
