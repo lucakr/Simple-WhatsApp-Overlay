@@ -4,14 +4,17 @@ import android.Manifest.permission.CALL_PHONE
 import android.Manifest.permission.READ_CONTACTS
 import android.accessibilityservice.AccessibilityService
 import android.app.KeyguardManager
-import android.content.*
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.content.pm.ResolveInfo
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.provider.Settings.SettingNotFoundException
-import android.text.TextUtils
 import android.text.TextUtils.SimpleStringSplitter
 import android.view.View
 import android.widget.Toast
@@ -138,23 +141,29 @@ class FullscreenActivity : AppCompatActivity() {
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.M)
-    private fun checkSettingsPermission() {
-
-        // Checks if app already has permission to draw overlays
-        if (!Settings.System.canWrite(this)) {
-
-            // If not, form up an Intent to launch the permission request
-            val intent = Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:$packageName"))
-
-            // Launch Intent, with the supplied request code
-            startActivityForResult(intent, REQUEST_CODE)
-        }
-    }
-
-    @RequiresApi(Build.VERSION_CODES.M)
+    @RequiresApi(Build.VERSION_CODES.P)
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+
+        if(requestCode == HOME_CHANGE) {
+            if(!isMyLauncherDefault()) {
+                unregisterReceiver(bReceiver)
+                finishAndRemoveTask()
+            } else {
+                // Start automation service
+                if (!isAccessibilityOn(this, AutomationService::class.java)) {
+                    startActivityForResult(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS), ACCESS_CHANGE)
+                }
+            }
+        }
+
+        if(requestCode == ACCESS_CHANGE) {
+            // Start automation service
+            if (!isAccessibilityOn(this, AutomationService::class.java)) {
+                unregisterReceiver(bReceiver)
+                finishAndRemoveTask()
+            }
+        }
 
         // Check if a request code is received that matches that which we provided for the overlay draw request
         if (requestCode == REQUEST_CODE) {
@@ -164,54 +173,45 @@ class FullscreenActivity : AppCompatActivity() {
                 Toast.makeText(this, "Sorry. Can't draw overlays without permission...", Toast.LENGTH_SHORT).show()
             }
         }
-    }
 
-    private fun requestContacts()
-    {
-        if (ContextCompat.checkSelfPermission(this, READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(READ_CONTACTS), MY_PERMISSIONS_REQUEST_CONTACTS)
-            // MY_PERMISSIONS_REQUEST_READ_CONTACTS is an
-            // app-defined int constant. The callback method gets the
-            // result of the request.
-        } else {
-            callPhoneGranted = true
+        if(requestCode == MY_PERMISSIONS_REQUEST_CONTACTS) {
+            requestContacts()
+        }
+
+        if(requestCode == MY_PERMISSIONS_REQUEST_CALL_PHONE) {
+            requestCallPhone()
         }
     }
 
-    private fun requestCallPhone()
-    {
-        if (ContextCompat.checkSelfPermission(this, CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(CALL_PHONE), MY_PERMISSIONS_REQUEST_CALL_PHONE)
-            // MY_PERMISSIONS_REQUEST_READ_CONTACTS is an
-            // app-defined int constant. The callback method gets the
-            // result of the request.
-        } else {
-            requestContactsGranted = true
-        }
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int,
-                                            permissions: Array<String>, grantResults: IntArray) {
+    @RequiresApi(Build.VERSION_CODES.P)
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         when (requestCode) {
-            MY_PERMISSIONS_REQUEST_CALL_PHONE -> {
-                // If request is cancelled, the result arrays are empty.
-                if ((grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
-                    // permission was granted, yay! Do the
-                    // contacts-related task you need to do
-                    callPhoneGranted = true
+            MY_PERMISSIONS_REQUEST_CONTACTS -> {
+                if (grantResults.isEmpty() || grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    //requestContactsGranted = true
+                    requestCallPhone()
+                } else {
+                    unregisterReceiver(bReceiver)
+                    finishAndRemoveTask()
                 }
-
                 return
             }
 
-            MY_PERMISSIONS_REQUEST_CONTACTS -> {
-                // If request is cancelled, the result arrays are empty.
-                if ((grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
-                    // permission was granted, yay! Do the
-                    // contacts-related task you need to do
-                    requestContactsGranted = true
+            MY_PERMISSIONS_REQUEST_CALL_PHONE -> {
+                if (grantResults.isEmpty() || grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    //callPhoneGranted = true
+                    if(!isMyLauncherDefault()) {
+                        startActivityForResult(Intent(Settings.ACTION_HOME_SETTINGS), HOME_CHANGE)
+                    } else {
+                        // Start automation service
+                        if (!isAccessibilityOn(this, AutomationService::class.java)) {
+                            startActivityForResult(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS), ACCESS_CHANGE)
+                        }
+                    }
+                } else {
+                    unregisterReceiver(bReceiver)
+                    finishAndRemoveTask()
                 }
-
                 return
             }
 
@@ -223,21 +223,32 @@ class FullscreenActivity : AppCompatActivity() {
         }
     }
 
-    private fun isNotificationListenerOn(): Boolean {
-        val pkgName = packageName
-        val flat = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
-        if (!TextUtils.isEmpty(flat)) {
-            val names = flat.split(":").toTypedArray()
-            for (i in names.indices) {
-                val cn = ComponentName.unflattenFromString(names[i])
-                if (cn != null) {
-                    if (TextUtils.equals(pkgName, cn.packageName)) {
-                        return true
-                    }
+    @RequiresApi(Build.VERSION_CODES.P)
+    private fun requestContacts()
+    {
+        if (ContextCompat.checkSelfPermission(this, READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(READ_CONTACTS), MY_PERMISSIONS_REQUEST_CONTACTS)
+        } else {
+            //requestContactsGranted = true
+            requestCallPhone()
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.P)
+    private fun requestCallPhone()
+    {
+        if (ContextCompat.checkSelfPermission(this, CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(CALL_PHONE), MY_PERMISSIONS_REQUEST_CALL_PHONE)
+        } else {
+            if(!isMyLauncherDefault()) {
+                startActivityForResult(Intent(Settings.ACTION_HOME_SETTINGS), HOME_CHANGE)
+            } else {
+                // Start automation service
+                if (!isAccessibilityOn(this, AutomationService::class.java)) {
+                    startActivityForResult(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS), ACCESS_CHANGE)
                 }
             }
         }
-        return false
     }
 
     private fun isAccessibilityOn(context: Context, clazz: Class<out AccessibilityService?>): Boolean {
@@ -276,13 +287,13 @@ class FullscreenActivity : AppCompatActivity() {
         super.onPostResume()
         println("RETURNED FROM WHATSAPP")
 
-        // Start automation service
-        if (!isAccessibilityOn(this, AutomationService::class.java)) {
-            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-            startActivity(intent)
-        } else {
-            //startService(Intent(this, AutomationService::class.java))
-        }
+//        // Start automation service if it's not running
+//        if (!isAccessibilityOn(this, AutomationService::class.java)) {
+//            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+//            startActivity(intent)
+//        } else {
+//            //startService(Intent(this, AutomationService::class.java))
+//        }
 
         // Let the accessibility service know that whatsapp has closed
         LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(ACTION_MAIN_ACTIVITY_RESUMED))
@@ -313,43 +324,25 @@ class FullscreenActivity : AppCompatActivity() {
         supportActionBar?.hide()
 
         hideNavigationAndNotification()
-
-        // Start the overlay service
-        val overlaySvc = Intent(this, OverlayService::class.java)
-        //startService(overlaySvc)
-
-        // Request READ_CONTACTS
-        requestContacts()
-
-        // Request CALL_PHONE
-        requestCallPhone()
-
-        while(!callPhoneGranted && !requestContactsGranted) {
-            Thread.sleep(100)
-
-            if(!callPhoneGranted) {
-                requestCallPhone()
-            }
-
-            if(!requestContactsGranted) {
-                requestContacts()
-            }
-        }
-
-        // Check permission for overlay
-        checkDrawOverlayPermission()
-
     }
 
+    @RequiresApi(Build.VERSION_CODES.P)
     override fun onPostCreate(savedInstanceState: Bundle?) {
         super.onPostCreate(savedInstanceState)
 
-        // Start automation service
-        if (!isAccessibilityOn(this, AutomationService::class.java)) {
-            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-            startActivity(intent)
-            return
-        }
+        // Start the permssion requests
+        // on success - it requests call access
+        // on call access request it prompts to change the home launcher
+        // then prompts to enable accessibility service
+        requestContacts()
+    }
+
+    private fun isMyLauncherDefault(): Boolean {
+        val intent = Intent(Intent.ACTION_MAIN)
+        intent.addCategory(Intent.CATEGORY_HOME)
+        val info = intent.resolveActivityInfo(packageManager, PackageManager.MATCH_DEFAULT_ONLY)
+        val currentHomePackage = info!!.packageName
+        return currentHomePackage == packageName
     }
 
     /** COMPANIONS **/
@@ -358,6 +351,8 @@ class FullscreenActivity : AppCompatActivity() {
         private const val MY_PERMISSIONS_REQUEST_CONTACTS = 0
         private const val MY_PERMISSIONS_REQUEST_CALL_PHONE = 1
         private const val REQUEST_CODE = 10101
+        private const val HOME_CHANGE = 1337
+        private const val ACCESS_CHANGE = 1007
         const val ACTION_MAIN_ACTIVITY_RESUMED = "main_activity_resumed"
         const val ACTION_LOCKED = "main_activity_locked"
         const val ACTION_UNLOCKED = "main_activity_unlocked"

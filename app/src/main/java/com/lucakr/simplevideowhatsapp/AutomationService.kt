@@ -135,6 +135,7 @@ class AutomationService : AccessibilityService() {
                 activeOverlay!!.findViewById<Button>(R.id.call_button).setOnClickListener{callButtonPress(it)}
                 activeOverlay!!.findViewById<Button>(R.id.left_button).setOnClickListener{scrollLeftButtonPress(it)}
                 activeOverlay!!.findViewById<Button>(R.id.right_button).setOnClickListener{scrollRightButtonPress(it)}
+                activeOverlay!!.findViewById<TextView>(R.id.topmost_view).setOnClickListener{middleClick(it)}
 
                 // Populate the list
                 contactView = activeOverlay!!.findViewById<RecyclerView>(R.id.name_list)
@@ -510,6 +511,21 @@ class AutomationService : AccessibilityService() {
     }
 
     /** BUTTON ON CLICKS **/
+
+    private var clickCount = 0
+    private var firstTime = System.currentTimeMillis()
+    private fun middleClick(view: View) {
+        println("here")
+        if(System.currentTimeMillis() - firstTime > 5000) {
+            println("reset")
+            clickCount = 0
+            firstTime = System.currentTimeMillis()
+        } else {
+            println("click")
+            clickCount++
+            if(clickCount >= 10) removeOverlay()
+        }
+    }
 
     @RequiresApi(Build.VERSION_CODES.P)
     private fun declineButtonPress(view: View) {
