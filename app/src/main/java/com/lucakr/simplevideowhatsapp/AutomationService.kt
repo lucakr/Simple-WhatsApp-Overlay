@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.annotation.SuppressLint
 import android.app.ActivityManager
 import android.app.Notification
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -14,31 +15,46 @@ import android.graphics.Rect
 import android.media.AudioManager
 import android.os.Build
 import android.provider.ContactsContract
-import android.util.DisplayMetrics
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import android.widget.*
+import android.widget.Button
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.annotation.RequiresApi
 import androidx.core.net.toUri
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.recyclerview.widget.RecyclerView
+import com.lucakr.simplevideowhatsapp.FullscreenActivity.Companion.ACTION_LOCKED
 import com.lucakr.simplevideowhatsapp.FullscreenActivity.Companion.ACTION_MAIN_ACTIVITY_RESUMED
+import com.lucakr.simplevideowhatsapp.FullscreenActivity.Companion.ACTION_UNLOCKED
+import com.lucakr.simplevideowhatsapp.NotificationListener.Companion.ACTION_ACCEPT
+import com.lucakr.simplevideowhatsapp.NotificationListener.Companion.ACTION_DECLINE
+import com.lucakr.simplevideowhatsapp.NotificationListener.Companion.CALLER_NAME
+import com.lucakr.simplevideowhatsapp.NotificationListener.Companion.CLEAR_NOTIFICATIONS
+import com.lucakr.simplevideowhatsapp.NotificationListener.Companion.FULLSCREEN_INTENT
+import com.lucakr.simplevideowhatsapp.NotificationListener.Companion.INCOMING_NOTIFICATION_POSTED
+import com.lucakr.simplevideowhatsapp.NotificationListener.Companion.INCOMING_NOTIFICATION_REMOVED
 
 
 class AutomationService : AccessibilityService() {
     private var notification: Notification?= null
     private lateinit var endCallBtn: List<AccessibilityNodeInfoCompat>
     private lateinit var callStatus: List<AccessibilityNodeInfoCompat>
-    private lateinit var callerName: List<AccessibilityNodeInfoCompat>
+    private lateinit var callerName: String
     private var activeOverlay: View? = null
     private lateinit var windowManager: WindowManager
     private lateinit var audioManager: AudioManager
     private var screenBounds = Rect()
+    private var locked = false
+    private var acceptAction : Notification.Action? = null
+    private var declineAction: Notification.Action? = null
+    private var fullscreenIntent: PendingIntent? = null
 
     enum class WhatsAppState {
         CLOSED, CALLING, IN_CALL, INCOMING, CLOSING
@@ -47,19 +63,27 @@ class AutomationService : AccessibilityService() {
 
     private fun soundOn() {
         println("Sound on")
-        audioManager.setStreamVolume(AudioManager.STREAM_RING, audioManager.getStreamMaxVolume(AudioManager.STREAM_RING), 0)
-        // WhatsApp handles the STREAM_VOICE_CALL volume itself - the little punk - but I'll still do it anyway
-        audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, audioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL), 0)
+        try {
+            audioManager.setStreamVolume(AudioManager.STREAM_RING, audioManager.getStreamMaxVolume(AudioManager.STREAM_RING),0)
+            // WhatsApp handles the STREAM_VOICE_CALL volume itself - the little punk - but I'll still do it anyway
+            audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, audioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL), 0)
+        } catch (t: Throwable) {
+
+        }
     }
 
     private fun soundOff() {
         println("Sound off")
-        audioManager.setStreamVolume(AudioManager.STREAM_ALARM, 0, 0)
-        audioManager.setStreamVolume(AudioManager.STREAM_NOTIFICATION, 0, 0)
-        audioManager.setStreamVolume(AudioManager.STREAM_RING, 0, 0)
-        audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, 0, 0)
-        audioManager.setStreamVolume(AudioManager.STREAM_SYSTEM, 0, 0)
-        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0)
+        try {
+            audioManager.setStreamVolume(AudioManager.STREAM_ALARM, 0, 0)
+            audioManager.setStreamVolume(AudioManager.STREAM_NOTIFICATION, 0, 0)
+            audioManager.setStreamVolume(AudioManager.STREAM_RING, 0, 0)
+            audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, 0, 0)
+            audioManager.setStreamVolume(AudioManager.STREAM_SYSTEM, 0, 0)
+            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0)
+        } catch (t: Throwable) {
+
+        }
     }
 
     @RequiresApi(Build.VERSION_CODES.P)
@@ -73,7 +97,10 @@ class AutomationService : AccessibilityService() {
         am.killBackgroundProcesses("com.whatsapp")
 
         // Go home
-        startActivity((Intent(Intent.ACTION_MAIN)).addCategory(Intent.CATEGORY_HOME).setFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        startActivity(
+                (Intent(Intent.ACTION_MAIN)).addCategory(Intent.CATEGORY_HOME)
+                    .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
     }
 
     private fun removeOverlay() {
@@ -103,7 +130,6 @@ class AutomationService : AccessibilityService() {
         activeOverlay = inflater.inflate(resourceId, null)
 
         // Custom listeners
-        activeOverlay!!.findViewById<TextView>(R.id.topmost_view).setOnTouchListener { v, event ->  true}
         when(resourceId) {
             R.layout.activity_fullscreen -> {
                 activeOverlay!!.findViewById<Button>(R.id.call_button).setOnClickListener{callButtonPress(it)}
@@ -126,27 +152,27 @@ class AutomationService : AccessibilityService() {
                 activeOverlay!!.findViewById<Button>(R.id.decline_button).setOnClickListener{declineButtonPress(it)}
                 activeOverlay!!.findViewById<Button>(R.id.answer_button).setOnClickListener{answerButtonPress(it)}
 
-                var incomingCaller:CharSequence ?= null
-                incomingCaller = if(callerName.isEmpty()) {
+                var incomingCaller:String ?= null
+                incomingCaller = if(callerName == "") {
                     "Unknown"
                 } else {
-                    callerName[0].text
+                    callerName
                 }
 
-                activeOverlay!!.findViewById<TextView>(R.id.caller_name).text = incomingCaller
+                val callerImage = activeOverlay!!.findViewById<ImageView>(R.id.caller_image) as ImageView
 
                 // Try and find call in contacts
-                val foundContact = whatsappContacts.single { it.myDisplayName == incomingCaller }
-
-                val callerImage = activeOverlay!!.findViewById<ImageView>(R.id.caller_image) as ImageView
-                if(foundContact == null) {
-                    callerImage.setImageResource(android.R.color.transparent)
-                } else {
+                try {
+                    val foundContact = whatsappContacts.single { it.myDisplayName == incomingCaller }
                     if (foundContact.myThumbnail != "") {
                         callerImage.setImageURI(foundContact.myThumbnail.toUri())
                     } else {
                         callerImage.setImageResource(android.R.color.transparent)
                     }
+                    activeOverlay!!.findViewById<TextView>(R.id.caller_name).text = incomingCaller
+                } catch (t: Throwable) {
+                    callerImage.setImageResource(android.R.color.transparent)
+                    activeOverlay!!.findViewById<TextView>(R.id.caller_name).text = "Unknown"
                 }
             }
             R.layout.calling_overlay -> {
@@ -191,6 +217,16 @@ class AutomationService : AccessibilityService() {
 
                     setOverlay(R.layout.activity_fullscreen)
                 }
+
+                ACTION_UNLOCKED -> {
+                    println("Unlocked 2")
+                }
+
+                ACTION_LOCKED -> {
+                    println("Locked 2")
+                    removeOverlay()
+                }
+
             }
         }
     }
@@ -198,26 +234,59 @@ class AutomationService : AccessibilityService() {
     @RequiresApi(Build.VERSION_CODES.P)
     private fun errorNoEndCallBtn() {
         println("No end call btn")
-        closeWhatsApp()
+        state = WhatsAppState.CLOSED
+
+        soundOff()
+
+        // Kill whatsapp
+        val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        am.killBackgroundProcesses("com.whatsapp")
+
+        setOverlay(R.layout.activity_fullscreen)
+
+        // Go home
+        startActivity(
+            (Intent(Intent.ACTION_MAIN)).addCategory(Intent.CATEGORY_HOME)
+                .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
     }
 
     @RequiresApi(Build.VERSION_CODES.P)
     private fun errorNoNotification() {
         println("No notification")
-        closeWhatsApp()
+        state = WhatsAppState.CLOSED
+
+        soundOff()
+
+        // Kill whatsapp
+        val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        am.killBackgroundProcesses("com.whatsapp")
+
+        setOverlay(R.layout.activity_fullscreen)
+
+        // Go home
+        startActivity(
+            (Intent(Intent.ACTION_MAIN)).addCategory(Intent.CATEGORY_HOME)
+                .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
     }
 
+    @RequiresApi(Build.VERSION_CODES.P)
     override fun onCreate() {
         println("AUTOMATION SERVICE STARTED")
 
         // Setup Broadcast Receiver
-        val filter = IntentFilter(ACTION_MAIN_ACTIVITY_RESUMED)
+        val filter = IntentFilter(ACTION_MAIN_ACTIVITY_RESUMED).apply {
+            addAction(ACTION_LOCKED)
+            addAction(ACTION_UNLOCKED)
+        }
         LocalBroadcastManager.getInstance(this).registerReceiver(bReceiver, filter)
     }
 
     @RequiresApi(Build.VERSION_CODES.P)
     override fun onServiceConnected() {
         super.onServiceConnected()
+        println("AUTOMATION SERVICE CONNECTED")
 
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -235,6 +304,34 @@ class AutomationService : AccessibilityService() {
 
     }
 
+    private fun getAllChildren(n: AccessibilityNodeInfo): ArrayList<AccessibilityNodeInfo>? {
+        if (n.childCount == 0) {
+            val nodeArrayList = ArrayList<AccessibilityNodeInfo>()
+            nodeArrayList.add(n)
+            return nodeArrayList
+        }
+        val result = ArrayList<AccessibilityNodeInfo>()
+        val ng = n
+        for (i in 0 until ng.childCount) {
+            val child = ng.getChild(i)
+            val nodeArrayList = ArrayList<AccessibilityNodeInfo>()
+            nodeArrayList.add(n)
+            try {
+                nodeArrayList.addAll(getAllChildren(child)!!)
+            } catch (t: Throwable) {
+                return null
+            }
+            result.addAll(nodeArrayList)
+        }
+        return result
+    }
+
+    private fun area(node: AccessibilityNodeInfo): Int {
+        var surfaceArea = Rect()
+        node.getBoundsInScreen(surfaceArea)
+        return surfaceArea.width() * surfaceArea.height()
+    }
+
     @RequiresApi(Build.VERSION_CODES.P)
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event!!.packageName == "com.whatsapp" && (event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED || event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED)) {
@@ -249,7 +346,7 @@ class AutomationService : AccessibilityService() {
             var sourceBounds = Rect()
 
             event.source.getBoundsInScreen(sourceBounds)
-            if(sourceBounds != screenBounds) return
+            if(sourceBounds != screenBounds && event.source.viewIdResourceName != "com.whatsapp:id/call_status") return
 
             val nodeInfoList = AccessibilityNodeInfoCompat.wrap(event.source)
 
@@ -258,13 +355,21 @@ class AutomationService : AccessibilityService() {
             val tmpCallerName = nodeInfoList.findAccessibilityNodeInfosByViewId("com.whatsapp:id/name")
             val addParticipantBtn = nodeInfoList.findAccessibilityNodeInfosByViewId("com.whatsapp:id/top_add_participant_btn")
             val callBackBtn = nodeInfoList.findAccessibilityNodeInfosByViewId("com.whatsapp:id/call_back_btn")
+            val callLabel = nodeInfoList.findAccessibilityNodeInfosByViewId("com.whatsapp:id/voip_call_label")
+            val callRating = nodeInfoList.findAccessibilityNodeInfosByViewId("com.whatsapp:id/call_rating_title")
+
+            if(callRating.isNotEmpty()) {
+                println("Rating dialog detected")
+                closeWhatsApp()
+                return
+            }
 
             if(tmpEndBtn.isNotEmpty()) {
                 endCallBtn = tmpEndBtn
             }
 
             if(tmpCallerName.isNotEmpty()) {
-                callerName = tmpCallerName
+                callerName = tmpCallerName[0].text.toString()
             }
 
             if(callBackBtn.isNotEmpty()) {
@@ -282,9 +387,28 @@ class AutomationService : AccessibilityService() {
                     println("CLOSING from $state during IN_CALL transition")
                     closeWhatsApp()
                 }
+            } else if(callLabel.isNotEmpty() && (callLabel[0].text.contains("WHATSAPP VIDEO CALL") || callLabel[0].text.contains("WHATSAPP VOICE CALL")) && tmpEndBtn.isEmpty()) {
+                if(state == WhatsAppState.INCOMING) return
+
+                if(state == WhatsAppState.CLOSED) {
+                    println("INCOMING from CLOSED")
+                    state = WhatsAppState.INCOMING
+                    setOverlay(R.layout.start_overlay)
+                    soundOn()
+                } else {
+                    println("CLOSING from $state during INCOMING transition")
+                    closeWhatsApp()
+                }
             } else if(callStatus.isNotEmpty()) {
+                //println(callStatus[0].text)
+
+                if(callStatus[0].text != null && callStatus[0].text.contains("is on another call")) {
+                    endCallBtn[0].performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    return
+                }
+
                 when(callStatus[0].text) {
-                    "Ringing", "Calling" -> {
+                    "Ringing", "Calling", "RINGING", "CALLING" -> {
                         if(state == WhatsAppState.CALLING) return
 
                         if(state == WhatsAppState.CLOSED) {
@@ -325,61 +449,48 @@ class AutomationService : AccessibilityService() {
             } else {
                 if(tmpEndBtn.isNotEmpty()) return // quick fix for early exit on call answer
                 println("CLOSING from $state during unknown transition")
-                closeWhatsApp()
+                //closeWhatsApp()
             }
 
         } else if(event.packageName == "com.whatsapp" && event.eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
             val tmpNot = event.parcelableData as Notification
+            println(event.toString())
 
             // Check the channel is correct
-            if (tmpNot!!.channelId == "voip_notification_11") {
+            if (tmpNot!!.group == "call_notification_group") {
                 notification = tmpNot
             }
         } else if(event.packageName == "com.android.systemui" && event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
-            //println(event)
+            //println(event.toString())
 
             // Make sure non-null source
             if(event.source == null) return
 
-            // First search for the app name and check its whatsapp
-            var appName: AccessibilityNodeInfo ?= null
-            try {
-                appName = event.source.getChild(0).getChild(1).getChild(1).getChild(3).getChild(0).getChild(0).getChild(1)
-            } catch (t: Throwable) {
-                //println(t.toString())
-                return
-            }
-            if(appName == null) return
-            if(appName.text != "WhatsApp") return
+            // Get all children of the source
+            val children = getAllChildren(event.source)
+            if(children.isNullOrEmpty()) return
 
-//            println("Verified whatsapp")
+            // First search for the app name and check its whatsapp
+            val whatsappNodes = children.filter { it -> it.text == "WhatsApp" }
+            if(whatsappNodes.isNullOrEmpty()) return
+
+            //println("Verified whatsapp")
 
             // Check that it's an incoming call
-            var subTitle: AccessibilityNodeInfo ?= null
-            try {
-                subTitle = event.source.getChild(0).getChild(1).getChild(1).getChild(3).getChild(0).getChild(1).getChild(0).getChild(1)
-            } catch (t: Throwable) {
-                //println(t.toString())
-                return
-            }
-            if(subTitle == null) return
-            if(subTitle.text == null) return
-            if(!subTitle.text.contains("Incoming video call", ignoreCase = false) && !subTitle.text.contains("Incoming voice call", ignoreCase = false)) return
+            val incomingNodes = children.filter { it -> (it.text != null && (it.text.contains("Incoming video call", ignoreCase = false) || it.text.contains("Incoming voice call", ignoreCase = false)))}
+            if(incomingNodes.isNullOrEmpty()) return
 
-//            println("Verified incoming call")
+            //println("Verified incoming call")
 
-            // Get the child of the main view and click it
-            try {
-                //notification!!.fullScreenIntent.send()
-                val mainView = event.source.getChild(0).getChild(1).getChild(1)
-                mainView.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-//                println("Notification clicked")
-            } finally {
-                return
-            }
+            val clickableNodes = children.filter {it -> it.isClickable && it.viewIdResourceName == null && it.contentDescription == null && it.isVisibleToUser }
+            if(clickableNodes.isEmpty()) return
+            // Assume we want the largest child
+            clickableNodes.sortedBy { it -> area(it) }
+            while(!clickableNodes[0].performAction(AccessibilityNodeInfo.ACTION_CLICK)) {}
+            println(clickableNodes[0].toString())
 
         } else {
-//            println(event!!.toString())
+            //println(event!!.toString())
         }
 
     }
@@ -403,6 +514,7 @@ class AutomationService : AccessibilityService() {
     @RequiresApi(Build.VERSION_CODES.P)
     private fun declineButtonPress(view: View) {
         if(notification != null) {
+        //if(declineAction != null) {
             println("Declining call")
             notification!!.actions[0].actionIntent.send()
         } else {
@@ -413,8 +525,8 @@ class AutomationService : AccessibilityService() {
     @RequiresApi(Build.VERSION_CODES.P)
     private fun answerButtonPress(view: View) {
         if(notification != null) {
+        //if(acceptAction != null) {
             println("Answering call")
-            //println(notification!!.toString())
             notification!!.actions[1].actionIntent.send()
         } else {
             errorNoNotification()
