@@ -15,6 +15,7 @@ import android.graphics.Rect
 import android.media.AudioManager
 import android.os.Build
 import android.provider.ContactsContract
+import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -33,6 +34,9 @@ import androidx.recyclerview.widget.RecyclerView
 import com.lucakr.simplevideowhatsapp.FullscreenActivity.Companion.ACTION_LOCKED
 import com.lucakr.simplevideowhatsapp.FullscreenActivity.Companion.ACTION_MAIN_ACTIVITY_RESUMED
 import com.lucakr.simplevideowhatsapp.FullscreenActivity.Companion.ACTION_UNLOCKED
+import com.lucakr.simplevideowhatsapp.FullscreenActivity.Companion.DEV_EXIT
+import com.lucakr.simplevideowhatsapp.FullscreenActivity.Companion.DISABLE_ACCESSIBILITY
+import com.lucakr.simplevideowhatsapp.FullscreenActivity.Companion.ENABLE_ACCESSIBILITY
 import com.lucakr.simplevideowhatsapp.NotificationListener.Companion.ACTION_ACCEPT
 import com.lucakr.simplevideowhatsapp.NotificationListener.Companion.ACTION_DECLINE
 import com.lucakr.simplevideowhatsapp.NotificationListener.Companion.CALLER_NAME
@@ -55,6 +59,7 @@ class AutomationService : AccessibilityService() {
     private var acceptAction : Notification.Action? = null
     private var declineAction: Notification.Action? = null
     private var fullscreenIntent: PendingIntent? = null
+    private var enabled = false
 
     enum class WhatsAppState {
         CLOSED, CALLING, IN_CALL, INCOMING, CLOSING
@@ -207,7 +212,20 @@ class AutomationService : AccessibilityService() {
         override fun onReceive(context: Context, intent: Intent) {
             // Check the intent is for us
             when(intent.action) {
+                ENABLE_ACCESSIBILITY -> {
+                    println("Enabling accessibility")
+                    enabled = true
+                }
+
+                DISABLE_ACCESSIBILITY -> {
+                    println("Disabling accessibility")
+                    enabled = false
+                    removeOverlay()
+                }
+
                 ACTION_MAIN_ACTIVITY_RESUMED -> {
+                    if(!enabled) return
+
                     state = WhatsAppState.CLOSED
 
                     soundOff()
@@ -280,8 +298,15 @@ class AutomationService : AccessibilityService() {
         val filter = IntentFilter(ACTION_MAIN_ACTIVITY_RESUMED).apply {
             addAction(ACTION_LOCKED)
             addAction(ACTION_UNLOCKED)
+            addAction(ENABLE_ACCESSIBILITY)
+            addAction(DISABLE_ACCESSIBILITY)
         }
         LocalBroadcastManager.getInstance(this).registerReceiver(bReceiver, filter)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(bReceiver)
     }
 
     @RequiresApi(Build.VERSION_CODES.P)
@@ -335,6 +360,8 @@ class AutomationService : AccessibilityService() {
 
     @RequiresApi(Build.VERSION_CODES.P)
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if(!enabled) return
+
         if (event!!.packageName == "com.whatsapp" && (event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED || event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED)) {
             //println(event.toString())
             if(event.source != null) {
@@ -499,6 +526,7 @@ class AutomationService : AccessibilityService() {
     /** BROADCAST EVENTS **/
 
     private fun sendStartVideoCall(myVideoId: String) {
+        println("Sending START VIDEO CALL")
         val intent = Intent(ACTION_START_VIDEO)
         intent.putExtra(CALL_ID, myVideoId)
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
@@ -514,21 +542,28 @@ class AutomationService : AccessibilityService() {
 
     private var clickCount = 0
     private var firstTime = System.currentTimeMillis()
+    @RequiresApi(Build.VERSION_CODES.P)
     private fun middleClick(view: View) {
-        println("here")
         if(System.currentTimeMillis() - firstTime > 5000) {
-            println("reset")
             clickCount = 0
             firstTime = System.currentTimeMillis()
         } else {
-            println("click")
             clickCount++
-            if(clickCount >= 10) removeOverlay()
+            if(clickCount >= 10) {
+                println("dev exit")
+                removeOverlay()
+                LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(DEV_EXIT))
+            }
         }
     }
 
+    private var btnPressTime:Long = 0
+
     @RequiresApi(Build.VERSION_CODES.P)
     private fun declineButtonPress(view: View) {
+        if(System.currentTimeMillis() - btnPressTime < btnDebounceTime) return
+
+        btnPressTime = System.currentTimeMillis()
         if(notification != null) {
         //if(declineAction != null) {
             println("Declining call")
@@ -540,6 +575,9 @@ class AutomationService : AccessibilityService() {
 
     @RequiresApi(Build.VERSION_CODES.P)
     private fun answerButtonPress(view: View) {
+        if(System.currentTimeMillis() - btnPressTime < btnDebounceTime) return
+
+        btnPressTime = System.currentTimeMillis()
         if(notification != null) {
         //if(acceptAction != null) {
             println("Answering call")
@@ -551,6 +589,9 @@ class AutomationService : AccessibilityService() {
 
     @RequiresApi(Build.VERSION_CODES.P)
     private fun endButtonPress(view: View) {
+        if(System.currentTimeMillis() - btnPressTime < btnDebounceTime) return
+
+        btnPressTime = System.currentTimeMillis()
         // Check endCallBtn to be sure
         if (endCallBtn.isNotEmpty()) {
             println("Performing end call action")
@@ -564,9 +605,16 @@ class AutomationService : AccessibilityService() {
 
     @RequiresApi(Build.VERSION_CODES.M)
     private fun callButtonPress(view: View) {
+        if(System.currentTimeMillis() - btnPressTime < btnDebounceTime) return
+
+        btnPressTime = System.currentTimeMillis()
+
+        println("Call btn press")
+
         // Get contact uid
         if(whatsappContacts[contactPos].myVideoId != "")
         {
+            println("Starting send start")
             sendStartVideoCall(whatsappContacts[contactPos].myVideoId)
         }
         else if(whatsappContacts[contactPos].myVoipId != "")
@@ -578,7 +626,10 @@ class AutomationService : AccessibilityService() {
     }
 
     private fun scrollLeftButtonPress(view: View) {
-        if(contactPos > 0) contactPos--
+        if(contactPos > 0) {
+            contactPos--
+        } else if(contactPos == 0) contactPos = whatsappContacts.size-1
+
         contactView.suppressLayout(false)
         contactView.scrollToPosition(contactPos)
         contactView.suppressLayout(true)
@@ -587,7 +638,10 @@ class AutomationService : AccessibilityService() {
     }
 
     private fun scrollRightButtonPress(view: View) {
-        if(contactPos < whatsappContacts.size-1) contactPos++
+        if(contactPos < whatsappContacts.size-1) {
+            contactPos++
+        } else if(contactPos == whatsappContacts.size-1) contactPos = 0
+
         contactView.suppressLayout(false)
         contactView.scrollToPosition(contactPos)
         contactView.suppressLayout(true)
@@ -712,5 +766,6 @@ class AutomationService : AccessibilityService() {
         const val ACTION_START_VOIP = "start_voip"
         const val ACTION_START_VIDEO = "start_video"
         const val CALL_ID = "call_id"
+        const val btnDebounceTime = 2000 // 2s
     }
 }

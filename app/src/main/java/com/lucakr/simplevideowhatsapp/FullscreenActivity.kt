@@ -9,7 +9,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.content.pm.ResolveInfo
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -26,6 +25,7 @@ import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.lucakr.simplevideowhatsapp.AutomationService.Companion.ACTION_START_VIDEO
 import com.lucakr.simplevideowhatsapp.AutomationService.Companion.ACTION_START_VOIP
 import com.lucakr.simplevideowhatsapp.AutomationService.Companion.CALL_ID
+import com.lucakr.simplevideowhatsapp.AutomationService.Companion.btnDebounceTime
 import kotlinx.android.synthetic.main.default_activity.*
 
 
@@ -36,6 +36,7 @@ import kotlinx.android.synthetic.main.default_activity.*
 class FullscreenActivity : AppCompatActivity() {
     private var callPhoneGranted = false
     private var requestContactsGranted = false
+    private var permissionSetupComplete = true
 
     private fun sendUnlocked() {
         LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(ACTION_UNLOCKED))
@@ -51,21 +52,56 @@ class FullscreenActivity : AppCompatActivity() {
         keyguardLock.requestDismissKeyguard(this, null)
     }
 
+    @RequiresApi(Build.VERSION_CODES.P)
+    private fun end() {
+        finishAndRemoveTask()
+    }
+
+    // Variable for blocking multiple calls in quick succession
+    // This is probably fixed but I'll leave it in just in case
+    private var lastCallTime:Long = 0
+
     private val bReceiver: BroadcastReceiver = object : BroadcastReceiver() {
         @RequiresApi(Build.VERSION_CODES.P)
         override fun onReceive(context: Context, intent: Intent) {
 
             when (intent.action) {
                 ACTION_START_VIDEO -> {
+                    if(System.currentTimeMillis() - lastCallTime < btnDebounceTime) {
+                        println("Redial error")
+                        println(this.toString())
+                        return
+                    }
+                    lastCallTime = System.currentTimeMillis()
                     println("Starting Video call")
                     videoCall(intent.getStringExtra(CALL_ID))
                 }
 
                 ACTION_START_VOIP -> {
+                    if(System.currentTimeMillis() - lastCallTime < btnDebounceTime) {
+                        println("Redial error")
+                        return
+                    }
+                    lastCallTime = System.currentTimeMillis()
                     println("Starting Voip call")
                     voipCall(intent.getStringExtra(CALL_ID))
                 }
 
+                DEV_EXIT -> {
+                    println("RX dev_exit")
+                    dismissKeyguard()
+                    startActivityForResult(Intent(Settings.ACTION_HOME_SETTINGS), HOME_CHANGE)
+                }
+
+            }
+        }
+    }
+
+    private val cReceiver: BroadcastReceiver = object : BroadcastReceiver() {
+        @RequiresApi(Build.VERSION_CODES.P)
+        override fun onReceive(context: Context, intent: Intent) {
+
+            when (intent.action) {
                 Intent.ACTION_SCREEN_ON -> {
                     println("Unlocked")
                     //sendUnlocked()
@@ -76,6 +112,7 @@ class FullscreenActivity : AppCompatActivity() {
                     println("Locked")
                     sendLocked()
                 }
+
             }
         }
     }
@@ -127,32 +164,21 @@ class FullscreenActivity : AppCompatActivity() {
 
     /** PERMISSION SETUP **/
 
-    @RequiresApi(Build.VERSION_CODES.M)
-    private fun checkDrawOverlayPermission() {
-
-        // Checks if app already has permission to draw overlays
-        if (!Settings.canDrawOverlays(this)) {
-
-            // If not, form up an Intent to launch the permission request
-            val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
-
-            // Launch Intent, with the supplied request code
-            startActivityForResult(intent, REQUEST_CODE)
-        }
-    }
-
     @RequiresApi(Build.VERSION_CODES.P)
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
 
         if(requestCode == HOME_CHANGE) {
+            println("Home reply")
             if(!isMyLauncherDefault()) {
-                unregisterReceiver(bReceiver)
-                finishAndRemoveTask()
+                end()
             } else {
                 // Start automation service
                 if (!isAccessibilityOn(this, AutomationService::class.java)) {
                     startActivityForResult(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS), ACCESS_CHANGE)
+                }  else {
+                    LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(ENABLE_ACCESSIBILITY))
+                    permissionSetupComplete = true
                 }
             }
         }
@@ -160,8 +186,9 @@ class FullscreenActivity : AppCompatActivity() {
         if(requestCode == ACCESS_CHANGE) {
             // Start automation service
             if (!isAccessibilityOn(this, AutomationService::class.java)) {
-                unregisterReceiver(bReceiver)
-                finishAndRemoveTask()
+                end()
+            } else {
+                permissionSetupComplete = true
             }
         }
 
@@ -174,13 +201,6 @@ class FullscreenActivity : AppCompatActivity() {
             }
         }
 
-        if(requestCode == MY_PERMISSIONS_REQUEST_CONTACTS) {
-            requestContacts()
-        }
-
-        if(requestCode == MY_PERMISSIONS_REQUEST_CALL_PHONE) {
-            requestCallPhone()
-        }
     }
 
     @RequiresApi(Build.VERSION_CODES.P)
@@ -191,8 +211,7 @@ class FullscreenActivity : AppCompatActivity() {
                     //requestContactsGranted = true
                     requestCallPhone()
                 } else {
-                    unregisterReceiver(bReceiver)
-                    finishAndRemoveTask()
+                    end()
                 }
                 return
             }
@@ -206,11 +225,13 @@ class FullscreenActivity : AppCompatActivity() {
                         // Start automation service
                         if (!isAccessibilityOn(this, AutomationService::class.java)) {
                             startActivityForResult(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS), ACCESS_CHANGE)
+                        } else {
+                            LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(ENABLE_ACCESSIBILITY))
+                            permissionSetupComplete = true
                         }
                     }
                 } else {
-                    unregisterReceiver(bReceiver)
-                    finishAndRemoveTask()
+                    end()
                 }
                 return
             }
@@ -246,6 +267,8 @@ class FullscreenActivity : AppCompatActivity() {
                 // Start automation service
                 if (!isAccessibilityOn(this, AutomationService::class.java)) {
                     startActivityForResult(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS), ACCESS_CHANGE)
+                } else {
+                    permissionSetupComplete = true
                 }
             }
         }
@@ -287,13 +310,23 @@ class FullscreenActivity : AppCompatActivity() {
         super.onPostResume()
         println("RETURNED FROM WHATSAPP")
 
-//        // Start automation service if it's not running
-//        if (!isAccessibilityOn(this, AutomationService::class.java)) {
-//            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-//            startActivity(intent)
-//        } else {
-//            //startService(Intent(this, AutomationService::class.java))
-//        }
+        if(permissionSetupComplete) {
+            if (!isMyLauncherDefault()) {
+                startActivityForResult(Intent(Settings.ACTION_HOME_SETTINGS), HOME_CHANGE)
+                LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(DISABLE_ACCESSIBILITY))
+            } else {
+                // Enable automation if the service is active
+                if (isAccessibilityOn(this, AutomationService::class.java)) {
+                    LocalBroadcastManager.getInstance(this)
+                        .sendBroadcast(Intent(ENABLE_ACCESSIBILITY))
+                } else {
+                    startActivityForResult(
+                        Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS),
+                        ACCESS_CHANGE
+                    )
+                }
+            }
+        }
 
         // Let the accessibility service know that whatsapp has closed
         LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(ACTION_MAIN_ACTIVITY_RESUMED))
@@ -308,16 +341,6 @@ class FullscreenActivity : AppCompatActivity() {
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Setup Broadcast Receiver
-        val filter = IntentFilter(ACTION_START_VIDEO).apply {
-            addAction(ACTION_START_VOIP)
-            addAction(Intent.ACTION_SCREEN_ON)
-            addAction(Intent.ACTION_SCREEN_OFF)
-        }
-
-        LocalBroadcastManager.getInstance(this).registerReceiver(bReceiver, filter)
-        registerReceiver(bReceiver, filter)
 
         setContentView(R.layout.default_activity)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
@@ -334,7 +357,36 @@ class FullscreenActivity : AppCompatActivity() {
         // on success - it requests call access
         // on call access request it prompts to change the home launcher
         // then prompts to enable accessibility service
+        permissionSetupComplete = false
         requestContacts()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Setup Broadcast Receiver
+        val filter = IntentFilter(ACTION_START_VIDEO).apply {
+            addAction(ACTION_START_VOIP)
+            addAction(DEV_EXIT)
+        }
+
+        LocalBroadcastManager.getInstance(this).registerReceiver(bReceiver, filter)
+
+        val filter2 = IntentFilter(Intent.ACTION_SCREEN_ON).apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
+        }
+        registerReceiver(cReceiver, filter2)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(bReceiver)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        println("DESTROYING")
+        unregisterReceiver(cReceiver)
+        LocalBroadcastManager.getInstance(this).sendBroadcast(Intent(DISABLE_ACCESSIBILITY))
     }
 
     private fun isMyLauncherDefault(): Boolean {
@@ -356,5 +408,8 @@ class FullscreenActivity : AppCompatActivity() {
         const val ACTION_MAIN_ACTIVITY_RESUMED = "main_activity_resumed"
         const val ACTION_LOCKED = "main_activity_locked"
         const val ACTION_UNLOCKED = "main_activity_unlocked"
+        const val ENABLE_ACCESSIBILITY = "enable_accessibility"
+        const val DISABLE_ACCESSIBILITY = "disable_accessibility"
+        const val DEV_EXIT = "dev_exit"
     }
 }
