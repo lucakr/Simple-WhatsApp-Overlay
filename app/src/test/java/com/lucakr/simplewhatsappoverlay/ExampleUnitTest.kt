@@ -1,4 +1,4 @@
-package com.lucakr.simplevideowhatsapp
+package com.lucakr.simplewhatsappoverlay
 
 import org.junit.Test
 

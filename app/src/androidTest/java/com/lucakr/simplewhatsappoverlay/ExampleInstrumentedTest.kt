@@ -1,4 +1,4 @@
-package com.lucakr.simplevideowhatsapp
+package com.lucakr.simplewhatsappoverlay
 
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4

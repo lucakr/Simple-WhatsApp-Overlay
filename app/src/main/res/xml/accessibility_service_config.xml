@@ -5,7 +5,6 @@
     android:accessibilityFlags="flagReportViewIds|flagDefault|flagIncludeNotImportantViews|flagRetrieveInteractiveWindows"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:notificationTimeout="100"
-    android:settingsActivity="com.lucakr.simplevideowhatsapp.FullscreenActivity"
     android:canRequestTouchExplorationMode="true"
     android:canPerformGestures="true"
     android:canRetrieveWindowContent="true"
