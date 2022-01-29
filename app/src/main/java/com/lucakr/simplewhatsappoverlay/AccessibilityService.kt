@@ -27,6 +27,15 @@ import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.recyclerview.widget.RecyclerView
 import com.lucakr.whatsappvideochataccessibilityservice.R
 
+// TODO:
+// 1. Call cuts out on tablet side, changes to call ended, not sure if call has actually ended.
+//      Possibly the error state killing whatsapp?
+// 2. Call connects but overlay doesn't change, except self camera is visible
+//      Different app is still active, whatsapp has started as picture-in-picture
+// 3. Multiple calls somehow?
+// 4. Eventually gets deactivated
+
+
 class AccessibilityService : AccessibilityService() {
     private lateinit var windowManager: WindowManager
     private lateinit var audioManager: AudioManager
@@ -537,7 +546,7 @@ class AccessibilityService : AccessibilityService() {
             if(clickCount >= 10) {
                 println("Manual accessibility service disable")
                 removeOverlay()
-                // TODO - disable self
+                disableSelf()
             }
         }
     }

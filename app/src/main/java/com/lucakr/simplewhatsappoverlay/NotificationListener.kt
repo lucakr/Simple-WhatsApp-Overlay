@@ -82,9 +82,15 @@ class NotificationListener : NotificationListenerService() {
         }
 
         // Get the actions
-        answer = sbn.notification.actions!!.find{it.title.contains("Answer")}
-        decline = sbn.notification.actions!!.find{it.title.contains("Decline")}
-        end = sbn.notification.actions!!.find{it.title.contains("Hang up")}
+        sbn.notification.actions!!.find{it.title.contains("Answer")}?.let{
+            answer = it
+        }
+        sbn.notification.actions!!.find{it.title.contains("Decline")}?.let{
+            decline = it
+        }
+        sbn.notification.actions!!.find{it.title.contains("Hang up")}?.let{
+            end = it
+        }
 
         // Send notification posted intent with caller name
         val intent = Intent(notificationTrigger)

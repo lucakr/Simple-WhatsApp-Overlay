@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">WhatsAppVideoChatAccessibilityService</string>
+    <string name="app_name">Simple WhatsApp Overlay</string>
 
     <string name="accessibility_service_label">WhatsApp Accessibility Service</string>
     <string name="accessibility_service_description">This application uses the accessibility service to answer, decline, and end WhatsApp video calls without the user having to deal directly with WhatsApp. The goal is to simplify the interface and limit access for an elderly user who is not familiar with the technology but still wants the ability to video call friends and family.</string>
